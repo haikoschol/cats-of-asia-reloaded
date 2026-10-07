@@ -1,13 +1,32 @@
 <!doctype html>
-
 <html lang="en">
-
 <head>
-	<meta charset="UTF-8">
-	<title>Hello World!</title>
+  <meta charset="UTF-8">
+  <title>Greetings</title>
+
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #050505;
+      color: #00ff41;
+      font-family: "Courier New", monospace;
+    }
+
+    .greeting {
+      font-size: clamp(2rem, 7vw, 6rem);
+      text-align: center;
+      text-shadow:
+        0 0 8px #00ff41,
+        0 0 20px #00ff41,
+        0 0 45px #008f11;
+    }
+  </style>
 </head>
 
 <body>
-	<h1>Hello World !</h1>
+  <h1 class="greeting">{{.Greeting}} anonymous coward</h1>
 </body>
 </html>
