@@ -23,8 +23,8 @@ Create the local database configuration:
 cp .env.example .env
 ```
 
-Set a password in `.env`. The password in `POSTGRES_PASSWORD` must match the
-password in `DATABASE_URL`.
+Set the PostgreSQL values in `.env`. `DATABASE_URL` is assembled from these
+values, so the connection settings cannot get out of sync.
 
 Build the application:
 
