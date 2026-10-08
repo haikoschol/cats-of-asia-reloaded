@@ -6,6 +6,17 @@ set -a
 source .env
 set +a
 
+cat > pgconsole.toml <<EOF
+[[connections]]
+id = "cats"
+name = "Cats of Asia local"
+host = "db"
+port = 5432
+database = "${POSTGRES_DB}"
+username = "${POSTGRES_USER}"
+password = "${POSTGRES_PASSWORD}"
+EOF
+
 docker compose up -d
 
 until docker compose exec -T db pg_isready \

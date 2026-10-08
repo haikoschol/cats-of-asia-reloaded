@@ -44,6 +44,23 @@ the page to receive a different greeting.
 Press `Ctrl+C` to stop the web application. The database container continues
 to run.
 
+## Inspecting the local database
+
+`./scripts/run.sh` also starts pgconsole, a browser-based PostgreSQL client.
+
+Open [http://localhost:3001/](http://localhost:3001/) in a browser. No separate
+login is required; pgconsole is only available on your local computer.
+
+The `greetings` table is listed in the sidebar. Selecting it shows its schema.
+To view the rows, click **New Query** and run:
+
+```sql
+SELECT * FROM greetings;
+```
+
+The query result displays the seeded greetings. Values can be edited directly
+in the result grid and pgconsole will prepare the corresponding SQL update.
+
 ## Stop the database
 
 ```bash
