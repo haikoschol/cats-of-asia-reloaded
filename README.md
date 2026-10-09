@@ -44,6 +44,22 @@ the page to receive a different greeting.
 Press `Ctrl+C` to stop the web application. The database container continues
 to run.
 
+## User accounts
+
+Create a user account with a username as the only argument:
+
+```bash
+./scripts/run.sh create-user peter
+```
+
+The command prompts twice for a password without displaying the characters you
+type. It creates the account in the local PostgreSQL database and then exits.
+
+Start the web application with `./scripts/run.sh`, then open
+[http://localhost:3000/login](http://localhost:3000/login) to sign in. A
+successful login redirects to the homepage, which greets you by username. Use
+the **Log out** button in the top-right corner to end the session.
+
 ## Inspecting the local database
 
 `./scripts/run.sh` also starts pgconsole, a browser-based PostgreSQL client.
