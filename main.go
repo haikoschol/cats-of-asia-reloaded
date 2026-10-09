@@ -1,24 +1,53 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
+	"github.com/alexedwards/scs/postgresstore"
+	"github.com/alexedwards/scs/v2"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/term"
 )
 
 type application struct {
-	db *sql.DB
+	db             *sql.DB
+	sessionManager *scs.SessionManager
 }
 
 type templateData struct {
-	Greeting string
+	Greeting      string
+	Username      string
+	Authenticated bool
+	FormError     string
 }
 
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
+	username := "anonymous coward"
+	authenticated := false
+
+	if app.sessionManager.Exists(r.Context(), "authenticatedUserID") {
+		userID := app.sessionManager.GetInt(r.Context(), "authenticatedUserID")
+		err := app.db.QueryRow("SELECT username FROM users WHERE id = $1", userID).Scan(&username)
+		if err == sql.ErrNoRows {
+			app.sessionManager.Remove(r.Context(), "authenticatedUserID")
+			username = "anonymous coward"
+		} else if err != nil {
+			log.Printf("database query error: %v", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		} else {
+			authenticated = true
+		}
+	}
+
 	var greeting string
 
 	err := app.db.QueryRow(
@@ -38,7 +67,9 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := templateData{
-		Greeting: greeting,
+		Greeting:      greeting,
+		Username:      username,
+		Authenticated: authenticated,
 	}
 
 	err = tmpl.ExecuteTemplate(w, "home.tmpl", data)
@@ -46,6 +77,103 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 		log.Printf("template execution error: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
+	}
+}
+
+func (app *application) logout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if err := app.sessionManager.Destroy(r.Context()); err != nil {
+		log.Printf("session destruction error: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (app *application) login(w http.ResponseWriter, r *http.Request) {
+	if app.sessionManager.Exists(r.Context(), "authenticatedUserID") {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		app.renderLogin(w, http.StatusOK, templateData{})
+	case http.MethodPost:
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+
+		username := r.PostForm.Get("username")
+		password := r.PostForm.Get("password")
+
+		if username == "" || password == "" {
+			app.renderLogin(w, http.StatusUnprocessableEntity, templateData{
+				Username:  username,
+				FormError: "Username and password are required.",
+			})
+			return
+		}
+
+		var userID int
+		var hashedPassword string
+		err := app.db.QueryRow(
+			"SELECT id, hashed_password FROM users WHERE username = $1",
+			username,
+		).Scan(&userID, &hashedPassword)
+		if err == sql.ErrNoRows {
+			app.renderLogin(w, http.StatusUnauthorized, templateData{
+				Username:  username,
+				FormError: "Username or password is incorrect.",
+			})
+			return
+		}
+		if err != nil {
+			log.Printf("database query error: %v", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		if bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password)) != nil {
+			app.renderLogin(w, http.StatusUnauthorized, templateData{
+				Username:  username,
+				FormError: "Username or password is incorrect.",
+			})
+			return
+		}
+
+		if err := app.sessionManager.RenewToken(r.Context()); err != nil {
+			log.Printf("session renewal error: %v", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		app.sessionManager.Put(r.Context(), "authenticatedUserID", userID)
+
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	default:
+		w.Header().Set("Allow", "GET, POST")
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (app *application) renderLogin(w http.ResponseWriter, status int, data templateData) {
+	tmpl, err := template.ParseFiles("./template/login.tmpl")
+	if err != nil {
+		log.Printf("template parse error: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(status)
+	if err := tmpl.ExecuteTemplate(w, "login.tmpl", data); err != nil {
+		log.Printf("template execution error: %v", err)
 	}
 }
 
@@ -65,13 +193,96 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if len(os.Args) > 1 {
+		if os.Args[1] != "create-user" || len(os.Args) != 3 {
+			log.Fatal("usage: cats-of-asia-reloaded create-user <username>")
+		}
+
+		if err := createUser(db, os.Args[2]); err != nil {
+			log.Fatal(err)
+		}
+
+		return
+	}
+
+	sessionManager := scs.New()
+	sessionManager.Store = postgresstore.New(db)
+	sessionManager.Lifetime = 12 * time.Hour
+
 	app := &application{
-		db: db,
+		db:             db,
+		sessionManager: sessionManager,
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", app.home)
+	mux.HandleFunc("/login", app.login)
+	mux.HandleFunc("/logout", app.logout)
 
 	log.Println("starting server on http://localhost:3000")
-	log.Fatal(http.ListenAndServe(":3000", mux))
+	log.Fatal(http.ListenAndServe(":3000", sessionManager.LoadAndSave(mux)))
+}
+
+func createUser(db *sql.DB, username string) error {
+	if username == "" {
+		return fmt.Errorf("username must not be empty")
+	}
+
+	var exists bool
+	err := db.QueryRow("SELECT EXISTS (SELECT 1 FROM users WHERE username = $1)", username).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("check whether username exists: %w", err)
+	}
+	if exists {
+		return fmt.Errorf("username %q already exists", username)
+	}
+
+	password, err := readPassword("Password: ")
+	if err != nil {
+		return fmt.Errorf("read password: %w", err)
+	}
+	defer clearPassword(password)
+
+	confirmation, err := readPassword("Confirm password: ")
+	if err != nil {
+		return fmt.Errorf("read password confirmation: %w", err)
+	}
+	defer clearPassword(confirmation)
+
+	if len(password) == 0 {
+		return fmt.Errorf("password must not be empty")
+	}
+	if !bytes.Equal(password, confirmation) {
+		return fmt.Errorf("passwords do not match")
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword(password, bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+
+	_, err = db.Exec(
+		"INSERT INTO users (username, hashed_password) VALUES ($1, $2)",
+		username,
+		hashedPassword,
+	)
+	if err != nil {
+		return fmt.Errorf("create user: %w", err)
+	}
+
+	fmt.Printf("Created user %q.\n", username)
+	return nil
+}
+
+func readPassword(prompt string) ([]byte, error) {
+	fmt.Print(prompt)
+	password, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Println()
+	return password, err
+}
+
+func clearPassword(password []byte) {
+	for i := range password {
+		password[i] = 0
+	}
 }
