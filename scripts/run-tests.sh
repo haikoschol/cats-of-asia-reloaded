@@ -6,35 +6,51 @@ set -a
 source .env
 set +a
 
-test_project="cats-of-asia-reloaded-test"
-test_port=5433
+TEST_PROJECT="cats-of-asia-reloaded-test"
+TEST_PORT=5433
+
+test_compose() {
+  POSTGRES_HOST_PORT="$TEST_PORT" docker compose \
+    --project-name "$TEST_PROJECT" "$@"
+}
 
 cleanup() {
-  POSTGRES_HOST_PORT="$test_port" docker compose \
-    --project-name "$test_project" \
-    down --volumes --remove-orphans
+  test_compose down --volumes --remove-orphans
 }
 trap cleanup EXIT
 
-POSTGRES_HOST_PORT="$test_port" docker compose \
-  --project-name "$test_project" \
-  up --detach db
+test_compose up --detach db
 
-until docker compose --project-name "$test_project" exec -T db pg_isready \
-  -U "$POSTGRES_USER" \
-  -d "$POSTGRES_DB" >/dev/null; do
+for _ in {1..30}; do
+  if test_compose exec -T db psql \
+    -v ON_ERROR_STOP=1 \
+    -U "$POSTGRES_USER" \
+    -d "$POSTGRES_DB" \
+    -c "SELECT 1" >/dev/null 2>&1; then
+    break
+  fi
   sleep 1
 done
 
-docker compose --project-name "$test_project" exec -T db psql \
+if ! test_compose exec -T db psql \
+  -v ON_ERROR_STOP=1 \
+  -U "$POSTGRES_USER" \
+  -d "$POSTGRES_DB" \
+  -c "SELECT 1" >/dev/null 2>&1; then
+  echo "Test database '$POSTGRES_DB' was not ready after 30 seconds." >&2
+  test_compose logs db >&2 || true
+  exit 1
+fi
+
+test_compose exec -T db psql \
+  -v ON_ERROR_STOP=1 \
+  -U "$POSTGRES_USER" \
+  -d "$POSTGRES_DB" < scripts/schema.sql
+
+test_compose exec -T db psql \
   -v ON_ERROR_STOP=1 \
   -U "$POSTGRES_USER" \
   -d "$POSTGRES_DB" <<'SQL'
-CREATE TABLE IF NOT EXISTS greetings (
-    id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    greeting varchar(255) NOT NULL UNIQUE
-);
-
 TRUNCATE greetings RESTART IDENTITY;
 
 INSERT INTO greetings (greeting)
@@ -45,6 +61,6 @@ VALUES
     ('salve');
 SQL
 
-export DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${test_port}/${POSTGRES_DB}?sslmode=disable"
+export DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${TEST_PORT}/${POSTGRES_DB}?sslmode=disable"
 
 go test ./...
