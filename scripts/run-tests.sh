@@ -18,26 +18,11 @@ cleanup() {
   test_compose down --volumes --remove-orphans
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
-test_compose up --detach db
-
-for _ in {1..30}; do
-  if test_compose exec -T db psql \
-    -v ON_ERROR_STOP=1 \
-    -U "$POSTGRES_USER" \
-    -d "$POSTGRES_DB" \
-    -c "SELECT 1" >/dev/null 2>&1; then
-    break
-  fi
-  sleep 1
-done
-
-if ! test_compose exec -T db psql \
-  -v ON_ERROR_STOP=1 \
-  -U "$POSTGRES_USER" \
-  -d "$POSTGRES_DB" \
-  -c "SELECT 1" >/dev/null 2>&1; then
-  echo "Test database '$POSTGRES_DB' was not ready after 30 seconds." >&2
+if ! test_compose up --wait --wait-timeout 120 db; then
+  echo "Test database failed to start or become ready within 120 seconds." >&2
   test_compose logs db >&2 || true
   exit 1
 fi
@@ -63,4 +48,4 @@ SQL
 
 export DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${TEST_PORT}/${POSTGRES_DB}?sslmode=disable"
 
-go test ./...
+go test -count=1 ./...
