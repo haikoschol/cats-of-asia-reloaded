@@ -1,6 +1,6 @@
 # Cats of Asia Reloaded
 
-A small Go web application backed by PostgreSQL. The homepage displays a
+A small Go web application backed by PostgreSQL with PostGIS. The homepage displays a
 randomly selected greeting followed by "anonymous coward" on every request.
 
 ## Prerequisites
@@ -24,7 +24,9 @@ cp .env.example .env
 ```
 
 Set the PostgreSQL values in `.env`. `DATABASE_URL` is assembled from these
-values, so the connection settings cannot get out of sync.
+values, so the connection settings cannot get out of sync. The development
+database includes PostGIS, which is activated automatically when the schema is
+created.
 
 Build the application:
 

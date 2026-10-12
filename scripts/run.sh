@@ -6,6 +6,12 @@ set -a
 source .env
 set +a
 
+cleanup() {
+  docker compose down
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
 cat > pgconsole.toml <<EOF
 [[connections]]
 id = "cats"
@@ -19,9 +25,17 @@ EOF
 
 docker compose up -d
 
-until docker compose exec -T db pg_isready \
-  -U "$POSTGRES_USER" \
-  -d "$POSTGRES_DB" >/dev/null; do
+database_is_ready() {
+  docker compose exec -T db sh -c \
+    'case "$(tr "\000" " " < /proc/1/cmdline)" in postgres*) exit 0;; *) exit 1;; esac' &&
+    docker compose exec -T db psql \
+      -v ON_ERROR_STOP=1 \
+      -U "$POSTGRES_USER" \
+      -d "$POSTGRES_DB" \
+      -c 'SELECT 1' >/dev/null 2>&1
+}
+
+until database_is_ready; do
   sleep 1
 done
 
@@ -43,4 +57,4 @@ VALUES
 ON CONFLICT (greeting) DO NOTHING;
 SQL
 
-exec ./cats-of-asia-reloaded "$@"
+./cats-of-asia-reloaded "$@"

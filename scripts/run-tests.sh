@@ -14,6 +14,16 @@ test_compose() {
     --project-name "$TEST_PROJECT" "$@"
 }
 
+database_is_ready() {
+  test_compose exec -T db sh -c \
+    'case "$(tr "\000" " " < /proc/1/cmdline)" in postgres*) exit 0;; *) exit 1;; esac' &&
+    test_compose exec -T db psql \
+      -v ON_ERROR_STOP=1 \
+      -U "$POSTGRES_USER" \
+      -d "$POSTGRES_DB" \
+      -c 'SELECT 1' >/dev/null 2>&1
+}
+
 cleanup() {
   test_compose down --volumes --remove-orphans
 }
@@ -22,21 +32,13 @@ trap cleanup EXIT
 test_compose up --detach db
 
 for _ in {1..30}; do
-  if test_compose exec -T db psql \
-    -v ON_ERROR_STOP=1 \
-    -U "$POSTGRES_USER" \
-    -d "$POSTGRES_DB" \
-    -c "SELECT 1" >/dev/null 2>&1; then
+  if database_is_ready; then
     break
   fi
   sleep 1
 done
 
-if ! test_compose exec -T db psql \
-  -v ON_ERROR_STOP=1 \
-  -U "$POSTGRES_USER" \
-  -d "$POSTGRES_DB" \
-  -c "SELECT 1" >/dev/null 2>&1; then
+if ! database_is_ready; then
   echo "Test database '$POSTGRES_DB' was not ready after 30 seconds." >&2
   test_compose logs db >&2 || true
   exit 1
