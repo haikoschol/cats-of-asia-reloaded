@@ -1,6 +1,7 @@
 services:
   db:
-    image: postgis/postgis:17-3.5
+    image: postgis/postgis:18-3.6
+    platform: linux/amd64
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -8,7 +9,13 @@ services:
     ports:
       - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres18-data:/var/lib/postgresql
+    healthcheck:
+      # The temporary initialization server only accepts Unix socket connections.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 2s
+      timeout: 5s
+      retries: 60
 
   pgconsole:
     image: pgplex/pgconsole:latest
@@ -17,7 +24,8 @@ services:
     volumes:
       - ./pgconsole.toml:/etc/pgconsole.toml:ro
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
 volumes:
-  postgres-data:
+  postgres18-data:
