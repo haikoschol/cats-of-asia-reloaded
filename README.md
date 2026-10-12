@@ -60,6 +60,19 @@ Start the web application with `./scripts/run.sh`, then open
 successful login redirects to the homepage, which greets you by username. Use
 the **Log out** button in the top-right corner to end the session.
 
+## Run tests
+
+Run the automated homepage test with:
+
+```bash
+./scripts/run-tests.sh
+```
+
+The script starts a separate PostgreSQL test database on port `5433`, seeds the
+`greetings` table, and runs `go test ./...`. It checks that the homepage returns
+HTTP status `200` and contains `anonymous coward`. The test database, its Docker
+volume, and its network are removed automatically when the command finishes.
+
 ## Inspecting the local database
 
 `./scripts/run.sh` also starts pgconsole, a browser-based PostgreSQL client.
