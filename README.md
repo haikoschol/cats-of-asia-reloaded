@@ -196,8 +196,11 @@ UUIDs, points, and timestamps) must be provided by the caller when inserting row
 
 The existing Go `greetings`, `users`, and `sessions` tables remain in use.
 Django-specific authentication, admin, session, and migration bookkeeping tables
-are not copied. This creates the application structure, not a production-data
-import or sample places, photos, or platforms.
+are not copied. The schema also seeds three example places read from production:
+Bali (Indonesia), Vientiane (Laos), and Kuala Lumpur (Malaysia), with their
+original `tzoffset` values unchanged. Existing city/country pairs are skipped,
+so repeated starts create no duplicates and do not overwrite edited places.
+Photos and platforms are not seeded; this is not a full production-data import.
 
 Re-running either script preserves existing tables and data. `CREATE TABLE IF
 NOT EXISTS` does not change previously created tables. If you used an earlier

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"fmt"
 	"html/template"
@@ -22,11 +23,41 @@ type application struct {
 	sessionManager *scs.SessionManager
 }
 
+type location struct {
+	ID      int64
+	City    string
+	Country string
+}
+
 type templateData struct {
 	Greeting      string
 	Username      string
 	Authenticated bool
 	FormError     string
+	Locations     []location
+}
+
+func (app *application) locations(ctx context.Context) ([]location, error) {
+	rows, err := app.db.QueryContext(ctx,
+		"SELECT id, city, country FROM photos_location ORDER BY country, city, id",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	locations := []location{}
+	for rows.Next() {
+		var place location
+		if err := rows.Scan(&place.ID, &place.City, &place.Country); err != nil {
+			return nil, err
+		}
+		locations = append(locations, place)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return locations, nil
 }
 
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
@@ -59,6 +90,13 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	locations, err := app.locations(r.Context())
+	if err != nil {
+		log.Printf("location query error: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
 	tmpl, err := template.ParseFiles("./template/home.tmpl")
 	if err != nil {
 		log.Printf("template parse error: %v", err)
@@ -70,6 +108,7 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 		Greeting:      greeting,
 		Username:      username,
 		Authenticated: authenticated,
+		Locations:     locations,
 	}
 
 	err = tmpl.ExecuteTemplate(w, "home.tmpl", data)
