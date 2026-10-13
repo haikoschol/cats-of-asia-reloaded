@@ -50,6 +50,30 @@ func TestPhotoSchema(t *testing.T) {
 	if longitude != 100.5 || latitude != 13.75 {
 		t.Fatalf("unexpected longitude/latitude: %v, %v", longitude, latitude)
 	}
+	assertSchemaCount(t, tx, `SELECT count(*) FROM pg_constraint
+		WHERE conrelid::regclass::text LIKE 'photos_%' AND contype = 'f'
+		AND condeferrable AND condeferred AND confdeltype = 'a'`, 5)
+
+	// The production constraints allow a temporary missing reference until the
+	// transaction is checked, rather than rejecting the INSERT immediately.
+	if _, err := tx.Exec(`SAVEPOINT deferred_reference;
+		INSERT INTO photos_photo (id, filename, sha256, timestamp, coordinates_id)
+		VALUES ('00000000-0000-0000-0000-000000000003', 'deferred.jpg', repeat('c', 64), now(), -999)`); err != nil {
+		t.Fatal(err)
+	}
+	_, deferredErr := tx.Exec("SET CONSTRAINTS ALL IMMEDIATE")
+	if _, err := tx.Exec("ROLLBACK TO SAVEPOINT deferred_reference; RELEASE SAVEPOINT deferred_reference"); err != nil {
+		t.Fatal(err)
+	}
+	var deferredPgErr *pgconn.PgError
+	if !errors.As(deferredErr, &deferredPgErr) || deferredPgErr.Code != "23503" {
+		t.Fatalf("wanted deferred foreign-key violation, got %v", deferredErr)
+	}
+	// Finish pending foreign-key checks before issuing schema DDL in this test
+	// transaction. Real startup applies the schema before inserting any rows.
+	if _, err := tx.Exec("SET CONSTRAINTS ALL IMMEDIATE"); err != nil {
+		t.Fatal(err)
+	}
 
 	// Reapplying the shared schema must leave existing rows intact.
 	schema, err := os.ReadFile("scripts/schema.sql")
@@ -70,6 +94,10 @@ func TestPhotoSchema(t *testing.T) {
 		{"duplicate publication", `INSERT INTO photos_post (created_at, photo_id, platform_id) VALUES (now(), repeat('a', 64), -1)`, "23505"},
 		{"metadata references hash, not UUID", `INSERT INTO photos_rawmetadata (metadata, photo_id) VALUES ('{}', '00000000-0000-0000-0000-000000000001')`, "23503"},
 		{"missing platform", `INSERT INTO photos_post (created_at, photo_id, platform_id) VALUES (now(), repeat('b', 64), 999)`, "23503"},
+		{"referenced location cannot be deleted", `DELETE FROM photos_location WHERE id = -1`, "23503"},
+		{"referenced coordinates cannot be deleted", `DELETE FROM photos_coordinates WHERE id = -1`, "23503"},
+		{"referenced platform cannot be deleted", `DELETE FROM photos_platform WHERE id = -1`, "23503"},
+		{"referenced photo cannot be deleted", `DELETE FROM photos_photo WHERE sha256 = repeat('a', 64)`, "23503"},
 	} {
 		t.Run(check.name, func(t *testing.T) {
 			if _, err := tx.Exec("SAVEPOINT invalid_insert"); err != nil {
@@ -89,20 +117,14 @@ func TestPhotoSchema(t *testing.T) {
 		})
 	}
 
-	if _, err := tx.Exec("DELETE FROM photos_location WHERE id = -1"); err != nil {
-		t.Fatal(err)
-	}
-	assertSchemaCount(t, tx, "SELECT count(*) FROM photos_coordinates", 0)
-	assertSchemaCount(t, tx, "SELECT count(*) FROM photos_photo WHERE coordinates_id IS NULL", 2)
-	assertSchemaCount(t, tx, "SELECT count(*) FROM photos_post", 1)
-
-	if _, err := tx.Exec("DELETE FROM photos_platform WHERE id = -1"); err != nil {
-		t.Fatal(err)
-	}
-	assertSchemaCount(t, tx, "SELECT count(*) FROM photos_post", 0)
-	if _, err := tx.Exec(`INSERT INTO photos_platform (id, name, profile_url) VALUES (-1, 'Example', 'https://example.com/cats');
-		INSERT INTO photos_post (created_at, photo_id, platform_id) VALUES (now(), repeat('a', 64), -1);
-		DELETE FROM photos_photo WHERE sha256 = repeat('a', 64)`); err != nil {
+	// Django implemented cascading deletions in application code. SQL callers
+	// must explicitly remove dependents or clear their references first.
+	if _, err := tx.Exec(`DELETE FROM photos_rawmetadata;
+		DELETE FROM photos_post;
+		DELETE FROM photos_photo WHERE sha256 = repeat('a', 64);
+		DELETE FROM photos_coordinates;
+		DELETE FROM photos_location;
+		DELETE FROM photos_platform`); err != nil {
 		t.Fatal(err)
 	}
 	assertSchemaCount(t, tx, "SELECT count(*) FROM photos_rawmetadata", 0)
