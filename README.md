@@ -148,8 +148,54 @@ The script starts a separate PostgreSQL test database on port `5433`, seeds the
 results. It checks that the homepage returns
 HTTP status `200` and contains `anonymous coward`. The test database, its Docker
 volume, and its network are removed automatically when the command finishes.
+Schema tests also check geographic coordinates, unique constraints, foreign-key
+references and deletion behavior, and reapplying the schema without losing data.
 
 ## Inspecting the local database
+
+Both `scripts/run.sh` and `scripts/run-tests.sh` apply `scripts/schema.sql`.
+It includes the six application tables from the original Python project's
+`photos/models.py` and migrations `0001` through `0004`, retaining their names:
+
+| Table | Contents |
+| --- | --- |
+| `photos_location` | City, country, and time-zone offset |
+| `photos_coordinates` | Geographic point, altitude, and reference to a location |
+| `photos_photo` | Photo UUID, filename, unique SHA-256 hash, timestamp, and optional coordinates |
+| `photos_rawmetadata` | Raw JSON metadata linked to a photo's SHA-256 hash |
+| `photos_platform` | Social platform name and profile URL |
+| `photos_post` | Publication time and references to a photo's hash and a platform |
+
+Coordinates use PostGIS `geography(Point, 4326)` with a spatial GiST index.
+Points are supplied as longitude first, latitude second. Unique constraints
+prevent duplicate city/country pairs, point/altitude pairs, and photo/platform
+pairs. Foreign keys implement the original models' deletion behavior: deleting
+a location deletes its coordinates but retains its photos with NULL coordinates;
+deleting a photo deletes its metadata and posts; deleting a platform deletes its
+posts. Values normally supplied by Django (including photo UUIDs, points, and
+timestamps) must be provided by the caller when inserting rows.
+
+The existing Go `greetings`, `users`, and `sessions` tables remain in use.
+Django-specific authentication, admin, session, and migration bookkeeping tables
+are not copied. This creates the application structure, not a production-data
+import or sample places, photos, or platforms.
+
+Re-running either script preserves existing tables and data. `CREATE TABLE IF
+NOT EXISTS` does not upgrade an already existing table with a different
+definition; future changes to existing columns require migrations.
+
+While `./scripts/run.sh` is running, open a second terminal in the repository
+root to list the imported tables with `psql`:
+
+```bash
+docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "\dt public.photos_*"'
+```
+
+To inspect columns, constraints, and indexes, for example for coordinates:
+
+```bash
+docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "\d public.photos_coordinates"'
+```
 
 `./scripts/run.sh` also starts pgconsole, a browser-based PostgreSQL client.
 
