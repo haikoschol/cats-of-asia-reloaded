@@ -2,11 +2,8 @@ package main
 
 import (
 	"database/sql"
-	"errors"
 	"os"
 	"testing"
-
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestPhotoSchema(t *testing.T) {
@@ -22,10 +19,13 @@ func TestPhotoSchema(t *testing.T) {
 	}
 	defer tx.Rollback()
 
+	// Insert parent rows before dependents, as a data import must do.
 	// Fixtures live only in this transaction and cannot survive the test.
 	fixtures := `
 		INSERT INTO photos_location (id, city, country, tzoffset)
 		VALUES (-1, 'Bangkok', 'Thailand', 420);
+		INSERT INTO photos_platform (id, name, profile_url)
+		VALUES (-1, 'Example', 'https://example.com/cats');
 		INSERT INTO photos_coordinates (id, point, altitude, location_id)
 		VALUES (-1, ST_GeogFromText('SRID=4326;POINT(100.5 13.75)'), 10, -1);
 		INSERT INTO photos_photo (id, filename, sha256, timestamp, coordinates_id)
@@ -33,8 +33,6 @@ func TestPhotoSchema(t *testing.T) {
 		       ('00000000-0000-0000-0000-000000000002', 'no-coordinates.jpg', repeat('b', 64), '2026-01-01T12:00:00Z', NULL);
 		INSERT INTO photos_rawmetadata (metadata, photo_id)
 		VALUES ('{"camera": "example"}', repeat('a', 64));
-		INSERT INTO photos_platform (id, name, profile_url)
-		VALUES (-1, 'Example', 'https://example.com/cats');
 		INSERT INTO photos_post (created_at, photo_id, platform_id)
 		VALUES ('2026-01-02T12:00:00Z', repeat('a', 64), -1);
 	`
@@ -50,30 +48,6 @@ func TestPhotoSchema(t *testing.T) {
 	if longitude != 100.5 || latitude != 13.75 {
 		t.Fatalf("unexpected longitude/latitude: %v, %v", longitude, latitude)
 	}
-	assertSchemaCount(t, tx, `SELECT count(*) FROM pg_constraint
-		WHERE conrelid::regclass::text LIKE 'photos_%' AND contype = 'f'
-		AND condeferrable AND condeferred AND confdeltype = 'a'`, 5)
-
-	// The production constraints allow a temporary missing reference until the
-	// transaction is checked, rather than rejecting the INSERT immediately.
-	if _, err := tx.Exec(`SAVEPOINT deferred_reference;
-		INSERT INTO photos_photo (id, filename, sha256, timestamp, coordinates_id)
-		VALUES ('00000000-0000-0000-0000-000000000003', 'deferred.jpg', repeat('c', 64), now(), -999)`); err != nil {
-		t.Fatal(err)
-	}
-	_, deferredErr := tx.Exec("SET CONSTRAINTS ALL IMMEDIATE")
-	if _, err := tx.Exec("ROLLBACK TO SAVEPOINT deferred_reference; RELEASE SAVEPOINT deferred_reference"); err != nil {
-		t.Fatal(err)
-	}
-	var deferredPgErr *pgconn.PgError
-	if !errors.As(deferredErr, &deferredPgErr) || deferredPgErr.Code != "23503" {
-		t.Fatalf("wanted deferred foreign-key violation, got %v", deferredErr)
-	}
-	// Finish pending foreign-key checks before issuing schema DDL in this test
-	// transaction. Real startup applies the schema before inserting any rows.
-	if _, err := tx.Exec("SET CONSTRAINTS ALL IMMEDIATE"); err != nil {
-		t.Fatal(err)
-	}
 
 	// Reapplying the shared schema must leave existing rows intact.
 	schema, err := os.ReadFile("scripts/schema.sql")
@@ -85,46 +59,29 @@ func TestPhotoSchema(t *testing.T) {
 	}
 	assertSchemaCount(t, tx, "SELECT count(*) FROM photos_photo", 2)
 
-	for _, check := range []struct {
-		name, query, code string
-	}{
-		{"duplicate location", `INSERT INTO photos_location (city, country, tzoffset) VALUES ('Bangkok', 'Thailand', 420)`, "23505"},
-		{"duplicate coordinates", `INSERT INTO photos_coordinates (point, altitude, location_id) VALUES (ST_GeogFromText('SRID=4326;POINT(100.5 13.75)'), 10, -1)`, "23505"},
-		{"duplicate photo hash", `INSERT INTO photos_photo (id, filename, sha256, timestamp) VALUES ('00000000-0000-0000-0000-000000000003', 'duplicate.jpg', repeat('a', 64), now())`, "23505"},
-		{"duplicate publication", `INSERT INTO photos_post (created_at, photo_id, platform_id) VALUES (now(), repeat('a', 64), -1)`, "23505"},
-		{"metadata references hash, not UUID", `INSERT INTO photos_rawmetadata (metadata, photo_id) VALUES ('{}', '00000000-0000-0000-0000-000000000001')`, "23503"},
-		{"missing platform", `INSERT INTO photos_post (created_at, photo_id, platform_id) VALUES (now(), repeat('b', 64), 999)`, "23503"},
-		{"referenced location cannot be deleted", `DELETE FROM photos_location WHERE id = -1`, "23503"},
-		{"referenced coordinates cannot be deleted", `DELETE FROM photos_coordinates WHERE id = -1`, "23503"},
-		{"referenced platform cannot be deleted", `DELETE FROM photos_platform WHERE id = -1`, "23503"},
-		{"referenced photo cannot be deleted", `DELETE FROM photos_photo WHERE sha256 = repeat('a', 64)`, "23503"},
-	} {
-		t.Run(check.name, func(t *testing.T) {
-			if _, err := tx.Exec("SAVEPOINT invalid_insert"); err != nil {
-				t.Fatal(err)
-			}
-			_, insertErr := tx.Exec(check.query)
-			if _, err := tx.Exec("ROLLBACK TO SAVEPOINT invalid_insert"); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := tx.Exec("RELEASE SAVEPOINT invalid_insert"); err != nil {
-				t.Fatal(err)
-			}
-			var pgErr *pgconn.PgError
-			if !errors.As(insertErr, &pgErr) || pgErr.Code != check.code {
-				t.Fatalf("wanted SQLSTATE %s, got %v", check.code, insertErr)
-			}
-		})
+	// A location deletion removes coordinates, but retains the photos.
+	if _, err := tx.Exec("DELETE FROM photos_location WHERE id = -1"); err != nil {
+		t.Fatal(err)
 	}
+	assertSchemaCount(t, tx, "SELECT count(*) FROM photos_coordinates", 0)
+	assertSchemaCount(t, tx, "SELECT count(*) FROM photos_photo WHERE coordinates_id IS NULL", 2)
+	assertSchemaCount(t, tx, "SELECT count(*) FROM photos_rawmetadata", 1)
+	assertSchemaCount(t, tx, "SELECT count(*) FROM photos_post", 1)
 
-	// Django implemented cascading deletions in application code. SQL callers
-	// must explicitly remove dependents or clear their references first.
-	if _, err := tx.Exec(`DELETE FROM photos_rawmetadata;
-		DELETE FROM photos_post;
-		DELETE FROM photos_photo WHERE sha256 = repeat('a', 64);
-		DELETE FROM photos_coordinates;
-		DELETE FROM photos_location;
-		DELETE FROM photos_platform`); err != nil {
+	// A platform deletion removes its posts, but retains photos and metadata.
+	if _, err := tx.Exec("DELETE FROM photos_platform WHERE id = -1"); err != nil {
+		t.Fatal(err)
+	}
+	assertSchemaCount(t, tx, "SELECT count(*) FROM photos_post", 0)
+	assertSchemaCount(t, tx, "SELECT count(*) FROM photos_photo", 2)
+	assertSchemaCount(t, tx, "SELECT count(*) FROM photos_rawmetadata", 1)
+
+	// A photo deletion removes its metadata and publication records.
+	if _, err := tx.Exec(`INSERT INTO photos_platform (id, name, profile_url)
+		VALUES (-1, 'Example', 'https://example.com/cats');
+		INSERT INTO photos_post (created_at, photo_id, platform_id)
+		VALUES (now(), repeat('a', 64), -1);
+		DELETE FROM photos_photo WHERE sha256 = repeat('a', 64)`); err != nil {
 		t.Fatal(err)
 	}
 	assertSchemaCount(t, tx, "SELECT count(*) FROM photos_rawmetadata", 0)

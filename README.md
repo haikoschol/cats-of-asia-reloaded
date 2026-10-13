@@ -148,16 +148,17 @@ The script starts a separate PostgreSQL test database on port `5433`, seeds the
 results. It checks that the homepage returns
 HTTP status `200` and contains `anonymous coward`. The test database, its Docker
 volume, and its network are removed automatically when the command finishes.
-Schema tests also check geographic coordinates, unique constraints, deferred
-foreign-key validation, protection against deleting referenced rows, and
-reapplying the schema without losing data.
+Schema tests also check inserting related photo data in dependency order,
+geographic coordinates, cascading deletions, retaining photos without
+coordinates, and reapplying the schema without losing data.
 
 ## Inspecting the local database
 
 Both `scripts/run.sh` and `scripts/run-tests.sh` apply `scripts/schema.sql`.
-It includes the six application tables exported directly from the production
-PostgreSQL 16.9 database on 2026-10-13, retaining table, column, constraint, and
-index names. The read-only export used:
+It includes six application tables based on a schema-only export from the
+production PostgreSQL 16.9 database on 2026-10-13. Table names, column names,
+types, and identity sequences remain compatible with its data. The read-only
+export used:
 
 ```bash
 pg_dump --schema-only --no-owner --no-privileges --table='public.photos_*'
@@ -178,25 +179,46 @@ following tables are included:
 Coordinates use PostGIS `geography(Point, 4326)` with a spatial GiST index.
 Points are supplied as longitude first, latitude second. Unique constraints
 prevent duplicate city/country pairs, point/altitude pairs, and photo/platform
-pairs. As in production, foreign keys use `NO ACTION` and are `DEFERRABLE
-INITIALLY DEFERRED`: missing references are normally rejected when a transaction
-commits. Referenced rows cannot simply be deleted. Django handled `CASCADE` and
-`SET NULL` in application code; future Go deletion handlers must explicitly
-delete dependent rows or clear references. Additional pattern-search indexes
-from production are included. Values normally supplied by Django (including
-photo UUIDs, points, and timestamps) must be provided by the caller when
-inserting rows.
+pairs. Foreign keys check references immediately. PostgreSQL handles deletion
+rules directly: deleting a location deletes its coordinates, but retains its
+photos with NULL coordinates; deleting a photo deletes its metadata and posts;
+deleting a platform deletes its posts. Indexes use descriptive names and cover
+foreign keys and geographic searches. Django-generated pattern-search indexes
+and deferred foreign-key checks are omitted.
+
+For a future production-data import, use a **data-only** export of these six
+tables, not a schema restore. Insert locations and platforms first, then
+coordinates, photos, and finally metadata and posts. Retain exported IDs, hashes,
+and timestamps, and restore the identity-sequence values so subsequently created
+rows do not reuse imported IDs. A PostgreSQL data-only dump contains sequence
+values as well as rows. Values normally supplied by Django (including photo
+UUIDs, points, and timestamps) must be provided by the caller when inserting rows.
 
 The existing Go `greetings`, `users`, and `sessions` tables remain in use.
 Django-specific authentication, admin, session, and migration bookkeeping tables
 are not copied. This creates the application structure, not a production-data
 import or sample places, photos, or platforms.
 
-Re-running either script preserves existing tables and data. A targeted upgrade
-also corrects the foreign keys and index names from the earlier code-derived
-version of this schema, without deleting rows. Beyond this upgrade, `CREATE
-TABLE IF NOT EXISTS` does not modify existing columns; future changes require
-migrations.
+Re-running either script preserves existing tables and data. `CREATE TABLE IF
+NOT EXISTS` does not change previously created tables. If you used an earlier
+development version of this schema, reset your local database as described
+below so the simplified constraints take effect.
+
+### Resetting the local development database
+
+Stop `scripts/run.sh` first. The following command deletes this Compose project's
+development database volume, including all local users, sessions, and photo
+data. Back up any data you want to retain before running it. It does not affect
+Railway's production database or the old PostgreSQL 17 volume.
+
+```bash
+docker compose down --volumes
+./scripts/run.sh
+```
+
+The next start creates a fresh database with the current schema and seeded
+greetings. Recreate local accounts using the user creation command above. The
+test script already creates and removes its own database on every run.
 
 While `./scripts/run.sh` is running, open a second terminal in the repository
 root to list the imported tables with `psql`:
