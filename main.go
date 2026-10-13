@@ -97,7 +97,7 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmpl, err := template.ParseFiles("./template/home.tmpl")
+	tmpl, err := template.ParseFiles("./template/home.tmpl", "./template/header.tmpl")
 	if err != nil {
 		log.Printf("template parse error: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

@@ -90,4 +90,17 @@ func TestHome(t *testing.T) {
 	if !strings.Contains(string(body), "anonymous coward") {
 		t.Fatal("homepage did not contain anonymous coward")
 	}
+	for _, content := range []string{
+		`<header class="site-header">`,
+		`Cats of Asia`,
+		`<select id="place" name="place"`,
+		`<p id="selected-place" class="selected-place" role="status" hidden></p>`,
+		`Bali, Indonesia`,
+		`Vientiane, Laos`,
+		`Kuala Lumpur, Malaysia`,
+	} {
+		if !strings.Contains(string(body), content) {
+			t.Errorf("homepage did not contain %q", content)
+		}
+	}
 }

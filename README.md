@@ -47,6 +47,12 @@ Start the database and the web application:
 Open [http://localhost:3000/](http://localhost:3000/) in a browser. Refresh
 the page to receive a different greeting.
 
+The header shows **Cats of Asia** and a **Place** dropdown populated from
+`photos_location`. Select a place to display its city and country immediately
+below the header without reloading the page. Selecting **Choose a place** clears
+the displayed location. The three example places are available automatically
+after startup; additional database entries also appear in the dropdown.
+
 Press `Ctrl+C` to stop the web application and remove the database and pgconsole
 containers. Database contents remain in the `postgres18-data` Docker volume.
 The containers are also cleaned up when a command exits or startup fails.

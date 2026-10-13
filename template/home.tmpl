@@ -2,17 +2,63 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Greetings</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cats of Asia</title>
 
   <style>
     body {
       margin: 0;
       min-height: 100vh;
-      display: grid;
-      place-items: center;
+      display: flex;
+      flex-direction: column;
       background: #050505;
       color: #00ff41;
       font-family: "Courier New", monospace;
+    }
+
+    .site-header {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      padding: 1rem;
+      border-bottom: 1px solid #008f11;
+    }
+
+    .site-name {
+      color: inherit;
+      font-size: 1.25rem;
+      font-weight: bold;
+      text-decoration: none;
+    }
+
+    .place-picker {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      max-width: 100%;
+    }
+
+    select {
+      max-width: 100%;
+      padding: 0.5rem;
+      font: inherit;
+      background: #050505;
+      color: inherit;
+      border: 1px solid #008f11;
+    }
+
+    main {
+      flex: 1;
+      display: grid;
+      place-items: center;
+      padding: 1rem;
+    }
+
+    .selected-place {
+      margin: 0;
+      padding: 1rem;
     }
 
     .greeting {
@@ -24,10 +70,11 @@
         0 0 45px #008f11;
     }
 
+    .logout-form {
+      margin-left: auto;
+    }
+
     .logout {
-      position: fixed;
-      top: 1rem;
-      right: 1rem;
       padding: 0.5rem 0.75rem;
       font: inherit;
       cursor: pointer;
@@ -36,12 +83,26 @@
 </head>
 
 <body>
-  {{if .Authenticated}}
-    <form action="/logout" method="post">
-      <button class="logout" type="submit">Log out</button>
-    </form>
-  {{end}}
+  {{template "header" .}}
+  <p id="selected-place" class="selected-place" role="status" hidden></p>
 
-  <h1 class="greeting">{{.Greeting}} {{.Username}}</h1>
+  <main>
+    <h1 class="greeting">{{.Greeting}} {{.Username}}</h1>
+  </main>
+
+  <script>
+    const place = document.getElementById("place");
+    const selectedPlace = document.getElementById("selected-place");
+
+    function updateSelectedPlace() {
+      selectedPlace.textContent = place.value
+        ? place.selectedOptions[0].textContent.trim()
+        : "";
+      selectedPlace.hidden = !place.value;
+    }
+
+    place.addEventListener("change", updateSelectedPlace);
+    updateSelectedPlace();
+  </script>
 </body>
 </html>

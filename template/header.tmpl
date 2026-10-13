@@ -1,0 +1,21 @@
+{{define "header"}}
+<header class="site-header">
+  <a class="site-name" href="/">Cats of Asia</a>
+
+  <label class="place-picker" for="place">
+    <span>Place</span>
+    <select id="place" name="place" {{if not .Locations}}disabled{{end}}>
+      <option value="">{{if .Locations}}Choose a place{{else}}No places available{{end}}</option>
+      {{range .Locations}}
+        <option value="{{.ID}}">{{if .City}}{{.City}}{{if .Country}}, {{.Country}}{{end}}{{else if .Country}}{{.Country}}{{else}}an undisclosed location{{end}}</option>
+      {{end}}
+    </select>
+  </label>
+
+  {{if .Authenticated}}
+    <form class="logout-form" action="/logout" method="post">
+      <button class="logout" type="submit">Log out</button>
+    </form>
+  {{end}}
+</header>
+{{end}}
