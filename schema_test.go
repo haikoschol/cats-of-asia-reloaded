@@ -49,7 +49,20 @@ func TestPhotoSchema(t *testing.T) {
 		t.Fatalf("unexpected longitude/latitude: %v, %v", longitude, latitude)
 	}
 
-	// Reapplying the shared schema must leave existing rows intact.
+	// Simulate an existing database from before the demo greeting was removed.
+	if _, err := tx.Exec(`
+		CREATE TABLE greetings (
+			id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+			greeting varchar(255) NOT NULL UNIQUE
+		);
+		INSERT INTO greetings (greeting) VALUES ('hello');
+		INSERT INTO users (id, username, hashed_password) OVERRIDING SYSTEM VALUE
+		VALUES (-1, 'schema-test-user', repeat('x', 60));
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	// Reapplying the shared schema removes only the obsolete demo data.
 	schema, err := os.ReadFile("scripts/schema.sql")
 	if err != nil {
 		t.Fatal(err)
@@ -58,6 +71,14 @@ func TestPhotoSchema(t *testing.T) {
 		t.Fatalf("reapplying schema: %v", err)
 	}
 	assertSchemaCount(t, tx, "SELECT count(*) FROM photos_photo", 2)
+	assertSchemaCount(t, tx, "SELECT count(*) FROM users WHERE id = -1", 1)
+	var greetingsRemoved bool
+	if err := tx.QueryRow("SELECT to_regclass('public.greetings') IS NULL").Scan(&greetingsRemoved); err != nil {
+		t.Fatal(err)
+	}
+	if !greetingsRemoved {
+		t.Fatal("obsolete greetings table still exists after applying the schema")
+	}
 
 	// A location deletion removes coordinates, but retains the photos.
 	if _, err := tx.Exec("DELETE FROM photos_location WHERE id = -1"); err != nil {

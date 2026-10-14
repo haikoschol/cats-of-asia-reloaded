@@ -1,7 +1,7 @@
 # Cats of Asia Reloaded
 
-A small Go web application backed by PostgreSQL with PostGIS. The homepage displays a
-randomly selected greeting followed by "anonymous coward" on every request.
+A small Go web application backed by PostgreSQL with PostGIS. The homepage lets
+you select a place and displays its name in the center of the page.
 
 ## Prerequisites
 
@@ -32,20 +32,30 @@ values, so the connection settings cannot get out of sync. The development
 database includes PostGIS, which is activated automatically when the schema is
 created.
 
-Build the application:
-
-```bash
-go build .
-```
-
 Start the database and the web application:
 
 ```bash
 ./scripts/run.sh
 ```
 
-Open [http://localhost:3000/](http://localhost:3000/) in a browser. Refresh
-the page to receive a different greeting.
+The script runs `go build .` before starting the containers and application, so
+each run uses the current source code. If compilation fails, startup stops.
+This also applies when using the script to create a user account.
+
+Open [http://localhost:3000/](http://localhost:3000/) in a browser.
+
+The header shows **Cats of Asia** and a **Places** menu populated from
+`photos_location`. Click **Places** to open the list, then select a place to
+display its city and country in the center of the page without reloading it.
+The menu closes after selection and its label remains **Places**. Before a
+selection, the page displays **No place selected**. If there are no places, the
+menu contains an empty list. The three example places are available automatically
+after startup; additional database entries also appear in the menu.
+
+Selecting a place stores its database ID in the URL, for example `/?place=1`.
+Reloading the page or opening that link restores the selection, provided the
+place exists in that database. The browser's Back and Forward buttons restore
+earlier selections. Missing or unknown IDs display **No place selected**.
 
 Press `Ctrl+C` to stop the web application and remove the database and pgconsole
 containers. Database contents remain in the `postgres18-data` Docker volume.
@@ -132,7 +142,7 @@ type. It creates the account in the local PostgreSQL database and then exits.
 
 Start the web application with `./scripts/run.sh`, then open
 [http://localhost:3000/login](http://localhost:3000/login) to sign in. A
-successful login redirects to the homepage, which greets you by username. Use
+successful login redirects to the homepage. Use
 the **Log out** button in the top-right corner to end the session.
 
 ## Run tests
@@ -143,10 +153,10 @@ Run the automated homepage test with:
 ./scripts/run-tests.sh
 ```
 
-The script starts a separate PostgreSQL test database on port `5433`, seeds the
-`greetings` table, and runs `go test -count=1 ./...` without reusing cached test
-results. It checks that the homepage returns
-HTTP status `200` and contains `anonymous coward`. The test database, its Docker
+The script starts a separate PostgreSQL test database on port `5433`, applies
+the shared schema with its example places, and runs `go test -count=1 ./...`
+without reusing cached test results. It checks that the homepage returns HTTP
+status `200` and displays `No place selected`. The test database, its Docker
 volume, and its network are removed automatically when the command finishes.
 Schema tests also check inserting related photo data in dependency order,
 geographic coordinates, cascading deletions, retaining photos without
@@ -194,13 +204,20 @@ rows do not reuse imported IDs. A PostgreSQL data-only dump contains sequence
 values as well as rows. Values normally supplied by Django (including photo
 UUIDs, points, and timestamps) must be provided by the caller when inserting rows.
 
-The existing Go `greetings`, `users`, and `sessions` tables remain in use.
+The existing Go `users` and `sessions` tables remain in use.
 Django-specific authentication, admin, session, and migration bookkeeping tables
-are not copied. This creates the application structure, not a production-data
-import or sample places, photos, or platforms.
+are not copied. The schema also seeds three example places read from production:
+Bali (Indonesia), Vientiane (Laos), and Kuala Lumpur (Malaysia), with their
+original `tzoffset` values unchanged. Existing city/country pairs are skipped,
+so repeated starts create no duplicates and do not overwrite edited places.
+Photos and platforms are not seeded; this is not a full production-data import.
 
-Re-running either script preserves existing tables and data. `CREATE TABLE IF
-NOT EXISTS` does not change previously created tables. If you used an earlier
+The schema removes the obsolete `greetings` demo table, including its example
+rows, on the next start. Users, sessions, and photo data are preserved; no
+database reset is needed for this change.
+
+Re-running either script preserves the remaining tables and data. `CREATE TABLE
+IF NOT EXISTS` does not change previously created tables. If you used an earlier
 development version of this schema, reset your local database as described
 below so the simplified constraints take effect.
 
@@ -216,8 +233,8 @@ docker compose down --volumes
 ./scripts/run.sh
 ```
 
-The next start creates a fresh database with the current schema and seeded
-greetings. Recreate local accounts using the user creation command above. The
+The next start creates a fresh database with the current schema and example
+places. Recreate local accounts using the user creation command above. The
 test script already creates and removes its own database on every run.
 
 While `./scripts/run.sh` is running, open a second terminal in the repository
@@ -238,14 +255,14 @@ docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "\d 
 Open [http://localhost:3001/](http://localhost:3001/) in a browser. No separate
 login is required; pgconsole is only available on your local computer.
 
-The `greetings` table is listed in the sidebar. Selecting it shows its schema.
+The `photos_location` table is listed in the sidebar. Selecting it shows its schema.
 To view the rows, click **New Query** and run:
 
 ```sql
-SELECT * FROM greetings;
+SELECT * FROM photos_location;
 ```
 
-The query result displays the seeded greetings. Values can be edited directly
+The query result displays the example places. Values can be edited directly
 in the result grid and pgconsole will prepare the corresponding SQL update.
 
 ## Stop the database

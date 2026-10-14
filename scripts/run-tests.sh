@@ -32,20 +32,6 @@ test_compose exec -T db psql \
   -U "$POSTGRES_USER" \
   -d "$POSTGRES_DB" < scripts/schema.sql
 
-test_compose exec -T db psql \
-  -v ON_ERROR_STOP=1 \
-  -U "$POSTGRES_USER" \
-  -d "$POSTGRES_DB" <<'SQL'
-TRUNCATE greetings RESTART IDENTITY;
-
-INSERT INTO greetings (greeting)
-VALUES
-    ('hello'),
-    ('moin'),
-    ('tach'),
-    ('salve');
-SQL
-
 export DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${TEST_PORT}/${POSTGRES_DB}?sslmode=disable"
 
 go test -count=1 ./...
