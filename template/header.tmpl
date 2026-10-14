@@ -2,15 +2,14 @@
 <header class="site-header">
   <a class="site-name" href="/">Cats of Asia</a>
 
-  <label class="place-picker" for="place">
-    <span>Place</span>
-    <select id="place" name="place" {{if not .Locations}}disabled{{end}}>
-      <option value="">{{if .Locations}}Choose a place{{else}}No places available{{end}}</option>
+  <details id="places" class="place-picker">
+    <summary id="places-toggle">Places</summary>
+    <ul class="place-list">
       {{range .Locations}}
-        <option value="{{.ID}}">{{if .City}}{{.City}}{{if .Country}}, {{.Country}}{{end}}{{else if .Country}}{{.Country}}{{else}}an undisclosed location{{end}}</option>
+        <li><button class="place-option" type="button" data-place-id="{{.ID}}">{{if .City}}{{.City}}{{if .Country}}, {{.Country}}{{end}}{{else if .Country}}{{.Country}}{{else}}an undisclosed location{{end}}</button></li>
       {{end}}
-    </select>
-  </label>
+    </ul>
+  </details>
 
   {{if .Authenticated}}
     <form class="logout-form" action="/logout" method="post">

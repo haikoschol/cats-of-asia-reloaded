@@ -1,9 +1,7 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
 
-CREATE TABLE IF NOT EXISTS greetings (
-    id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    greeting varchar(255) NOT NULL UNIQUE
-);
+-- Remove the obsolete demo table from existing development databases.
+DROP TABLE IF EXISTS greetings;
 
 CREATE TABLE IF NOT EXISTS users (
     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

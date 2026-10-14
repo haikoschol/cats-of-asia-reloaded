@@ -6,6 +6,9 @@ set -a
 source .env
 set +a
 
+echo "Building the application..."
+go build .
+
 cleanup() {
   docker compose down
 }
@@ -33,18 +36,5 @@ docker compose exec -T db psql \
   -v ON_ERROR_STOP=1 \
   -U "$POSTGRES_USER" \
   -d "$POSTGRES_DB" < scripts/schema.sql
-
-docker compose exec -T db psql \
-  -v ON_ERROR_STOP=1 \
-  -U "$POSTGRES_USER" \
-  -d "$POSTGRES_DB" <<'SQL'
-INSERT INTO greetings (greeting)
-VALUES
-    ('hello'),
-    ('moin'),
-    ('tach'),
-    ('salve')
-ON CONFLICT (greeting) DO NOTHING;
-SQL
 
 ./cats-of-asia-reloaded "$@"

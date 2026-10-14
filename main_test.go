@@ -87,14 +87,14 @@ func TestHome(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(string(body), "anonymous coward") {
-		t.Fatal("homepage did not contain anonymous coward")
+	if strings.Contains(string(body), "anonymous coward") {
+		t.Fatal("homepage still contained the old greeting")
 	}
 	for _, content := range []string{
 		`<header class="site-header">`,
 		`Cats of Asia`,
-		`<select id="place" name="place"`,
-		`<p id="selected-place" class="selected-place" role="status" hidden></p>`,
+		`<summary id="places-toggle">Places</summary>`,
+		`<h1 id="selected-place" class="selected-place" role="status">No place selected</h1>`,
 		`Bali, Indonesia`,
 		`Vientiane, Laos`,
 		`Kuala Lumpur, Malaysia`,

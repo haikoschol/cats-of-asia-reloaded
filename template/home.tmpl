@@ -33,20 +33,53 @@
     }
 
     .place-picker {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      max-width: 100%;
+      position: relative;
     }
 
-    select {
-      max-width: 100%;
+    .place-picker summary {
       padding: 0.5rem;
+      cursor: pointer;
+    }
+
+    .place-list {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      z-index: 1;
+      min-width: 12rem;
+      width: max-content;
+      max-width: min(20rem, calc(100vw - 2rem));
+      max-height: 60vh;
+      overflow-y: auto;
+      margin: 0.5rem 0 0;
+      padding: 0.25rem;
+      list-style: none;
+      background: #050505;
+      border: 1px solid #008f11;
+    }
+
+    .place-option {
+      display: block;
+      width: 100%;
+      padding: 0.75rem;
       font: inherit;
       background: #050505;
       color: inherit;
-      border: 1px solid #008f11;
+      border: 0;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .place-option:hover,
+    .place-option:focus-visible {
+      background: #008f11;
+      color: #050505;
+    }
+
+    @media (max-width: 480px) {
+      .place-picker {
+        width: 100%;
+      }
     }
 
     main {
@@ -58,10 +91,6 @@
 
     .selected-place {
       margin: 0;
-      padding: 1rem;
-    }
-
-    .greeting {
       font-size: clamp(2rem, 7vw, 6rem);
       text-align: center;
       text-shadow:
@@ -84,24 +113,50 @@
 
 <body>
   {{template "header" .}}
-  <p id="selected-place" class="selected-place" role="status" hidden></p>
 
   <main>
-    <h1 class="greeting">{{.Greeting}} {{.Username}}</h1>
+    <h1 id="selected-place" class="selected-place" role="status">No place selected</h1>
   </main>
 
   <script>
-    const place = document.getElementById("place");
+    const places = document.getElementById("places");
+    const placesToggle = document.getElementById("places-toggle");
     const selectedPlace = document.getElementById("selected-place");
+    const placeOptions = Array.from(places.querySelectorAll(".place-option"));
 
     function updateSelectedPlace() {
-      selectedPlace.textContent = place.value
-        ? place.selectedOptions[0].textContent.trim()
-        : "";
-      selectedPlace.hidden = !place.value;
+      const placeID = new URL(window.location.href).searchParams.get("place");
+      const option = placeOptions.find((option) => option.dataset.placeId === placeID);
+      selectedPlace.textContent = option ? option.textContent.trim() : "No place selected";
+      places.open = false;
     }
 
-    place.addEventListener("change", updateSelectedPlace);
+    placeOptions.forEach((option) => {
+      option.addEventListener("click", () => {
+        const url = new URL(window.location.href);
+        url.searchParams.set("place", option.dataset.placeId);
+        if (url.href !== window.location.href) {
+          window.history.pushState(null, "", url);
+        }
+        updateSelectedPlace();
+        placesToggle.focus();
+      });
+    });
+
+    places.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        places.open = false;
+        placesToggle.focus();
+      }
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!places.contains(event.target)) {
+        places.open = false;
+      }
+    });
+
+    window.addEventListener("popstate", updateSelectedPlace);
     updateSelectedPlace();
   </script>
 </body>

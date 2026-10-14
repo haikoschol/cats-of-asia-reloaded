@@ -30,7 +30,6 @@ type location struct {
 }
 
 type templateData struct {
-	Greeting      string
 	Username      string
 	Authenticated bool
 	FormError     string
@@ -61,15 +60,13 @@ func (app *application) locations(ctx context.Context) ([]location, error) {
 }
 
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
-	username := "anonymous coward"
 	authenticated := false
 
 	if app.sessionManager.Exists(r.Context(), "authenticatedUserID") {
 		userID := app.sessionManager.GetInt(r.Context(), "authenticatedUserID")
-		err := app.db.QueryRow("SELECT username FROM users WHERE id = $1", userID).Scan(&username)
+		err := app.db.QueryRowContext(r.Context(), "SELECT id FROM users WHERE id = $1", userID).Scan(&userID)
 		if err == sql.ErrNoRows {
 			app.sessionManager.Remove(r.Context(), "authenticatedUserID")
-			username = "anonymous coward"
 		} else if err != nil {
 			log.Printf("database query error: %v", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -77,17 +74,6 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 		} else {
 			authenticated = true
 		}
-	}
-
-	var greeting string
-
-	err := app.db.QueryRow(
-		"SELECT greeting FROM greetings ORDER BY RANDOM() LIMIT 1",
-	).Scan(&greeting)
-	if err != nil {
-		log.Printf("database query error: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
 	}
 
 	locations, err := app.locations(r.Context())
@@ -105,8 +91,6 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := templateData{
-		Greeting:      greeting,
-		Username:      username,
 		Authenticated: authenticated,
 		Locations:     locations,
 	}
