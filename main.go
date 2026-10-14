@@ -19,6 +19,7 @@ import (
 )
 
 type application struct {
+	config         config
 	db             *sql.DB
 	sessionManager *scs.SessionManager
 }
@@ -201,12 +202,12 @@ func (app *application) renderLogin(w http.ResponseWriter, status int, data temp
 }
 
 func main() {
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		log.Fatal("DATABASE_URL is not set")
+	cfg, err := loadConfig()
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	db, err := sql.Open("pgx", databaseURL)
+	db, err := sql.Open("pgx", cfg.databaseURL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -233,6 +234,7 @@ func main() {
 	sessionManager.Lifetime = 12 * time.Hour
 
 	app := &application{
+		config:         cfg,
 		db:             db,
 		sessionManager: sessionManager,
 	}

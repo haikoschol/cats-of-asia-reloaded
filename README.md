@@ -129,6 +129,46 @@ docker compose down
 Keep the old volume and the backup until you have verified your data. Neither
 the normal start script nor the test script deletes the old development volume.
 
+## Configuration for image and map services
+
+`config.go` reads the application's settings from environment variables once at
+startup. `scripts/run.sh` loads and exports your local `.env` file before starting
+the app. When running the executable directly, export its settings yourself;
+the executable does not read `.env` files.
+
+`.env.example` contains harmless example values. If you already have a `.env`
+file, add the new settings to it as needed instead of replacing your database
+credentials. Keep real credentials in your ignored `.env` file or the server's
+environment, not in `.env.example`.
+
+| Setting | Purpose | Requirement |
+| --- | --- | --- |
+| `DATABASE_URL` | PostgreSQL connection, including credentials; server-only | Required for every app command |
+| `CLOUDFLARE_IMAGES_DOMAIN` | Public image-delivery hostname, without a scheme or path | Required when displaying images |
+| `CLOUDFLARE_IMAGES_ACCOUNT_HASH` | Public account identifier used in image URLs | Required when displaying images |
+| `MAPBOX_ACCESS_TOKEN` | Public browser token for fetching map tiles | Required when displaying a map |
+
+The current homepage does not display images or a map. Their settings are
+loaded but optional at this stage; `validateImages` and `validateMap` provide
+the checks for the future feature handlers. Creating user accounts only needs
+the database connection. Missing required settings produce a message naming
+the variable, such as `DATABASE_URL is not set`, without including its value.
+
+The image domain and account hash identify public image URLs; neither grants
+upload access. The map setting must be a token intended for use in a browser.
+These three values can be passed to HTML or JSON when the image and map features
+are implemented. The dummy values in `.env.example` are sufficient for local
+development and configuration tests, but cannot load real Cloudflare images or
+Mapbox tiles. Replace them with the corresponding public settings when those
+features are needed.
+
+Future uploads, server-side geocoding, and Mastodon posting use separate private
+settings: `CLOUDFLARE_IMAGES_ACCOUNT_ID`, `CLOUDFLARE_IMAGES_API_KEY`,
+`GOOGLE_MAPS_API_KEY`, and `MASTODON_ACCESS_TOKEN`. They are not read or required
+by the current Go app. Keep them on the server and never pass them to templates,
+JavaScript, JSON responses, or logs. Do not log the complete configuration or
+the credential-bearing database URL.
+
 ## User accounts
 
 Create a user account with a username as the only argument:
@@ -161,6 +201,12 @@ volume, and its network are removed automatically when the command finishes.
 Schema tests also check inserting related photo data in dependency order,
 geographic coordinates, cascading deletions, retaining photos without
 coordinates, and reapplying the schema without losing data.
+
+Configuration tests set their own example environment values and check missing
+settings and feature-specific requirements. Regression tests use fake private
+credentials to check that homepage HTML and database-configuration startup error
+logs do not expose them. They do not contact Cloudflare or Mapbox and do not
+require real service credentials.
 
 ## Inspecting the local database
 

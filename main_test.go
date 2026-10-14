@@ -46,6 +46,15 @@ func TestLocations(t *testing.T) {
 }
 
 func TestHome(t *testing.T) {
+	privateSettings := setPrivateTestCredentials(t)
+	t.Setenv("CLOUDFLARE_IMAGES_DOMAIN", "images.example.com")
+	t.Setenv("CLOUDFLARE_IMAGES_ACCOUNT_HASH", "example-account-hash")
+	t.Setenv("MAPBOX_ACCESS_TOKEN", "example-public-map-token")
+	cfg, err := loadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		t.Fatal("DATABASE_URL is not set")
@@ -63,6 +72,7 @@ func TestHome(t *testing.T) {
 
 	sessionManager := scs.New()
 	app := &application{
+		config:         cfg,
 		db:             db,
 		sessionManager: sessionManager,
 	}
@@ -89,6 +99,14 @@ func TestHome(t *testing.T) {
 
 	if strings.Contains(string(body), "anonymous coward") {
 		t.Fatal("homepage still contained the old greeting")
+	}
+	for name, value := range privateSettings {
+		if strings.Contains(string(body), value) {
+			t.Errorf("homepage exposed the value of %s", name)
+		}
+	}
+	if strings.Contains(string(body), databaseURL) {
+		t.Error("homepage exposed the database connection URL")
 	}
 	for _, content := range []string{
 		`<header class="site-header">`,
