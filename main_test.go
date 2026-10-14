@@ -77,9 +77,7 @@ func TestHome(t *testing.T) {
 		sessionManager: sessionManager,
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", app.home)
-	server := httptest.NewServer(sessionManager.LoadAndSave(mux))
+	server := httptest.NewServer(app.routes())
 	defer server.Close()
 
 	response, err := server.Client().Get(server.URL + "/")

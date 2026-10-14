@@ -167,14 +167,15 @@ environment, not in `.env.example`.
 | --- | --- | --- |
 | `DATABASE_URL` | PostgreSQL connection, including credentials; server-only | Supply explicitly or derive from the local PostgreSQL settings |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Local database and pgconsole credentials; server-only | Required by the development and test scripts; optional for direct execution with an explicit `DATABASE_URL` |
-| `CLOUDFLARE_IMAGES_DOMAIN` | Public image-delivery hostname, without a scheme or path | Required when displaying images |
-| `CLOUDFLARE_IMAGES_ACCOUNT_HASH` | Public account identifier used in image URLs | Required when displaying images |
+| `CLOUDFLARE_IMAGES_DOMAIN` | Public image-delivery hostname, without a scheme or path | Required for future Cloudflare image delivery; not needed for local sample images |
+| `CLOUDFLARE_IMAGES_ACCOUNT_HASH` | Public account identifier used in image URLs | Required for future Cloudflare image delivery; not needed for local sample images |
 | `MAPBOX_ACCESS_TOKEN` | Public browser token for fetching map tiles | Required when displaying a map |
 
 The current homepage does not display images or a map. Their settings are
 loaded but optional at this stage; `validateImages` and `validateMap` provide
 the checks for the future feature handlers. Creating user accounts only needs
-the database connection. Missing required settings produce a message naming
+the database connection. Local `/sample-images/` URLs do not use Cloudflare or
+Mapbox settings. Missing required settings produce a message naming
 the variable, such as `DATABASE_URL is not set`, without including its value.
 
 An explicit `DATABASE_URL` is used as supplied and is not replaced by a derived
@@ -214,6 +215,68 @@ Start the web application with `./scripts/run.sh`, then open
 successful login redirects to the homepage. Use
 the **Log out** button in the top-right corner to end the session.
 
+## Local sample photos
+
+From the repository root, populate the development database with four example
+photos:
+
+```bash
+./scripts/run.sh seed-sample-data
+```
+
+The script builds the app, starts the local services, applies the shared schema,
+and runs the Go seed command. It then removes the containers while keeping the
+development database volume. If the database is already running, build the app
+and run `./cats-of-asia-reloaded seed-sample-data` instead. Like the other
+commands, it reads `.env` itself. The seed command accepts no positional
+arguments and refuses database hosts other than `localhost` or loopback IP
+addresses, including non-local fallback hosts.
+
+The existing Bali and Vientiane example places are reused, not recreated by the
+photo seed. `schilln.jpeg` and `knuddeln.jpeg` share one fictional coordinate
+record in Bali. `kuscheln.jpeg` has fictional coordinates in Vientiane, and
+`noDogorCat.jpeg` has no coordinates. Each photo has a fixed UUID and example
+capture time; its SHA-256 is calculated from the actual local image file.
+The first run prints `Inserted 4 sample photos.`; another run normally prints
+`Inserted 0 sample photos.` Existing photos are skipped on either UUID or
+SHA-256 conflicts, including developer edits to previously seeded photos.
+Existing places and coordinates are never overwritten. All inserts are in one
+transaction: a missing image, missing place, or incompatible existing coordinate
+record causes the command to fail without partially inserting data.
+
+The image files are stored in `sample-data/images/`, not inside PostgreSQL.
+Their source, attribution, licence, and preparation are documented in
+[sample-data/README.md](sample-data/README.md). No Cloudflare or Mapbox credentials
+are needed to seed these records or open the local sample images.
+
+After seeding, start the app again and leave it running:
+
+```bash
+./scripts/run.sh
+```
+
+Open any of the sample image URLs directly in your browser:
+
+- [schilln.jpeg](http://localhost:3000/sample-images/schilln.jpeg)
+- [knuddeln.jpeg](http://localhost:3000/sample-images/knuddeln.jpeg)
+- [kuscheln.jpeg](http://localhost:3000/sample-images/kuscheln.jpeg)
+- [noDogorCat.jpeg](http://localhost:3000/sample-images/noDogorCat.jpeg)
+
+These public, read-only URLs serve the four repository JPEG files, regardless
+of whether their database rows have already been seeded. Only these four
+filenames are allowed: missing images, other files, and directory listings
+return `404`. The handler supports `GET` and `HEAD`; other methods return `405`.
+Files must remain inside `sample-data/images/`, including when symlinks are used.
+The current homepage still shows only the place selector; a photo gallery is
+not part of this sample-data feature. To inspect the seeded rows, use pgconsole
+at [http://localhost:3001](http://localhost:3001) while the app is running, or
+query the database with:
+
+```bash
+docker compose exec db sh -c \
+  'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT id, filename, coordinates_id FROM photos_photo ORDER BY id;"'
+```
+
 ## Run tests
 
 Run the automated homepage test with:
@@ -234,6 +297,15 @@ The development or deployment `DATABASE_URL` is deliberately not used for tests.
 Schema tests also check inserting related photo data in dependency order,
 geographic coordinates, cascading deletions, retaining photos without
 coordinates, and reapplying the schema without losing data.
+Sample-data tests create and clean up dedicated schemas inside that same
+isolated test database. They verify real image hashes, the two-place dataset,
+shared and missing coordinates, repeated seeding, preservation of existing
+data, rollback on errors, and the Go command itself. The development database
+is not seeded by the test script.
+Image-delivery tests use the same routes as the app and check the four JPEG
+responses without Cloudflare settings, as well as `HEAD`, rejected methods,
+unknown files, directory listings, and attempts to access files outside the
+sample image directory.
 
 Configuration tests set their own example environment values and check missing
 settings, `.env` loading, environment precedence, operation without a file, and

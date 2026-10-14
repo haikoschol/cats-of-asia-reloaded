@@ -229,8 +229,15 @@ func main() {
 			if len(os.Args) != 3 {
 				log.Fatal("usage: cats-of-asia-reloaded create-user <username>")
 			}
+		case "seed-sample-data":
+			if len(os.Args) != 2 {
+				log.Fatal("usage: cats-of-asia-reloaded seed-sample-data")
+			}
+			if err := validateSampleDatabaseURL(cfg.DatabaseURL); err != nil {
+				log.Fatal(err)
+			}
 		default:
-			log.Fatal("unknown command; use create-user, prepare-local or run-tests")
+			log.Fatal("unknown command; use create-user, prepare-local, run-tests or seed-sample-data")
 		}
 	}
 
@@ -245,8 +252,19 @@ func main() {
 	}
 
 	if len(os.Args) > 1 {
-		if err := createUser(db, os.Args[2]); err != nil {
-			log.Fatal(err)
+		switch os.Args[1] {
+		case "create-user":
+			if err := createUser(db, os.Args[2]); err != nil {
+				log.Fatal(err)
+			}
+		case "seed-sample-data":
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			inserted, err := seedSampleData(ctx, db)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("Inserted %d sample photos. Existing records were left unchanged.\n", inserted)
 		}
 
 		return
@@ -262,13 +280,8 @@ func main() {
 		sessionManager: sessionManager,
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", app.home)
-	mux.HandleFunc("/login", app.login)
-	mux.HandleFunc("/logout", app.logout)
-
 	log.Println("starting server on http://localhost:3000")
-	log.Fatal(http.ListenAndServe(":3000", sessionManager.LoadAndSave(mux)))
+	log.Fatal(http.ListenAndServe(":3000", app.routes()))
 }
 
 func createUser(db *sql.DB, username string) error {
