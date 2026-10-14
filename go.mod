@@ -5,7 +5,9 @@ go 1.27.1
 require (
 	github.com/alexedwards/scs/postgresstore v0.0.0-20251002162104-209de6e426de
 	github.com/alexedwards/scs/v2 v2.9.0
+	github.com/caarlos0/env/v11 v11.4.1
 	github.com/jackc/pgx/v5 v5.11.0
+	github.com/joho/godotenv v1.5.1
 	golang.org/x/crypto v0.57.0
 	golang.org/x/term v0.46.0
 )

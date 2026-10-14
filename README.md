@@ -27,10 +27,10 @@ Create the local database configuration:
 cp .env.example .env
 ```
 
-Set the PostgreSQL values in `.env`. `DATABASE_URL` is assembled from these
-values, so the connection settings cannot get out of sync. The development
-database includes PostGIS, which is activated automatically when the schema is
-created.
+Set the PostgreSQL values in `.env`. Go builds a local `DATABASE_URL` from
+`POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` unless you provide an
+explicit URL. The development database includes PostGIS, which is activated
+automatically when the schema is created.
 
 Start the database and the web application:
 
@@ -41,6 +41,9 @@ Start the database and the web application:
 The script runs `go build .` before starting the containers and application, so
 each run uses the current source code. If compilation fails, startup stops.
 This also applies when using the script to create a user account.
+The script uses the Go application's `prepare-local` command to generate the
+ignored `pgconsole.toml` file with owner-only permissions. Docker Compose reads
+its container settings from `.env`; the script does not source the file.
 
 Open [http://localhost:3000/](http://localhost:3000/) in a browser.
 
@@ -131,10 +134,29 @@ the normal start script nor the test script deletes the old development volume.
 
 ## Configuration for image and map services
 
-`config.go` reads the application's settings from environment variables once at
-startup. `scripts/run.sh` loads and exports your local `.env` file before starting
-the app. When running the executable directly, export its settings yourself;
-the executable does not read `.env` files.
+`config.go` loads the optional `.env` file from the current working directory
+using [godotenv](https://github.com/joho/godotenv), merges it with the process
+environment, and parses the result using
+[caarlos0/env](https://github.com/caarlos0/env). The file is read as data, not
+executed as shell commands. Loading configuration does not change the parent
+process's environment.
+
+Explicit environment variables take precedence over `.env`, including empty
+values. A missing file is allowed when settings are supplied by the deployment
+environment. An unreadable or malformed file stops startup with a generic error
+that does not include its contents.
+
+For direct execution, build the app and run it from the repository root while
+the local database is already running:
+
+```bash
+go build .
+./cats-of-asia-reloaded
+```
+
+The executable reads `.env` itself; no shell export step is needed. On a server,
+provide settings through the service environment instead. `scripts/run.sh`
+remains the convenient development command that also starts the containers.
 
 `.env.example` contains harmless example values. If you already have a `.env`
 file, add the new settings to it as needed instead of replacing your database
@@ -143,7 +165,8 @@ environment, not in `.env.example`.
 
 | Setting | Purpose | Requirement |
 | --- | --- | --- |
-| `DATABASE_URL` | PostgreSQL connection, including credentials; server-only | Required for every app command |
+| `DATABASE_URL` | PostgreSQL connection, including credentials; server-only | Supply explicitly or derive from the local PostgreSQL settings |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Local database and pgconsole credentials; server-only | Required by the development and test scripts; optional for direct execution with an explicit `DATABASE_URL` |
 | `CLOUDFLARE_IMAGES_DOMAIN` | Public image-delivery hostname, without a scheme or path | Required when displaying images |
 | `CLOUDFLARE_IMAGES_ACCOUNT_HASH` | Public account identifier used in image URLs | Required when displaying images |
 | `MAPBOX_ACCESS_TOKEN` | Public browser token for fetching map tiles | Required when displaying a map |
@@ -153,6 +176,12 @@ loaded but optional at this stage; `validateImages` and `validateMap` provide
 the checks for the future feature handlers. Creating user accounts only needs
 the database connection. Missing required settings produce a message naming
 the variable, such as `DATABASE_URL is not set`, without including its value.
+
+An explicit `DATABASE_URL` is used as supplied and is not replaced by a derived
+URL. Existing `.env` files with `${POSTGRES_USER}`, `${POSTGRES_PASSWORD}`, and
+`${POSTGRES_DB}` references in that URL remain supported. With the new example
+file, Go constructs the URL itself and correctly encodes special characters in
+credentials. Your existing `.env` does not need to be overwritten.
 
 The image domain and account hash identify public image URLs; neither grants
 upload access. The map setting must be a token intended for use in a browser.
@@ -194,16 +223,23 @@ Run the automated homepage test with:
 ```
 
 The script starts a separate PostgreSQL test database on port `5433`, applies
-the shared schema with its example places, and runs `go test -count=1 ./...`
+the shared schema with its example places, and uses the Go application's
+`run-tests` command to run `go test -count=1 ./...`
 without reusing cached test results. It checks that the homepage returns HTTP
 status `200` and displays `No place selected`. The test database, its Docker
 volume, and its network are removed automatically when the command finishes.
+The Go command reads the same configuration as the app and supplies a connection
+to `localhost:5433` to the test process using the local PostgreSQL credentials.
+The development or deployment `DATABASE_URL` is deliberately not used for tests.
 Schema tests also check inserting related photo data in dependency order,
 geographic coordinates, cascading deletions, retaining photos without
 coordinates, and reapplying the schema without losing data.
 
 Configuration tests set their own example environment values and check missing
-settings and feature-specific requirements. Regression tests use fake private
+settings, `.env` loading, environment precedence, operation without a file, and
+feature-specific requirements. They also check that the test runner selects the
+isolated database and pgconsole credentials are safely quoted and protected.
+Regression tests use fake private
 credentials to check that homepage HTML and database-configuration startup error
 logs do not expose them. They do not contact Cloudflare or Mapbox and do not
 require real service credentials.

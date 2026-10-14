@@ -50,7 +50,7 @@ func TestHome(t *testing.T) {
 	t.Setenv("CLOUDFLARE_IMAGES_DOMAIN", "images.example.com")
 	t.Setenv("CLOUDFLARE_IMAGES_ACCOUNT_HASH", "example-account-hash")
 	t.Setenv("MAPBOX_ACCESS_TOKEN", "example-public-map-token")
-	cfg, err := loadConfig()
+	cfg, err := loadConfigFile(".env")
 	if err != nil {
 		t.Fatal(err)
 	}
