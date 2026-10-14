@@ -2,9 +2,8 @@
 
 set -euo pipefail
 
-set -a
-source .env
-set +a
+echo "Building the application..."
+go build .
 
 TEST_PROJECT="cats-of-asia-reloaded-test"
 TEST_PORT=5433
@@ -27,11 +26,8 @@ if ! test_compose up --wait --wait-timeout 120 db; then
   exit 1
 fi
 
-test_compose exec -T db psql \
-  -v ON_ERROR_STOP=1 \
-  -U "$POSTGRES_USER" \
-  -d "$POSTGRES_DB" < scripts/schema.sql
+test_compose exec -T db sh -c \
+  'exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < scripts/schema.sql
 
-export DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${TEST_PORT}/${POSTGRES_DB}?sslmode=disable"
-
-go test -count=1 ./...
+./cats-of-asia-reloaded run-tests "$TEST_PORT"
