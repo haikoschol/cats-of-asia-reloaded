@@ -18,7 +18,7 @@ func TestLoadConfig(t *testing.T) {
 	t.Setenv("CLOUDFLARE_IMAGES_ACCOUNT_HASH", "example-account-hash")
 	t.Setenv("MAPBOX_ACCESS_TOKEN", "example-public-map-token")
 
-	cfg, err := loadConfig()
+	cfg, err := loadConfigFile(".env")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,13 +37,13 @@ func TestLoadConfig(t *testing.T) {
 	t.Setenv("CLOUDFLARE_IMAGES_DOMAIN", "")
 	t.Setenv("CLOUDFLARE_IMAGES_ACCOUNT_HASH", "")
 	t.Setenv("MAPBOX_ACCESS_TOKEN", "")
-	if _, err := loadConfig(); err != nil {
+	if _, err := loadConfigFile(".env"); err != nil {
 		t.Fatalf("database-only configuration: %v", err)
 	}
 
 	for _, value := range []string{"", " \t\n"} {
 		t.Setenv("DATABASE_URL", value)
-		if _, err := loadConfig(); err == nil || err.Error() != "DATABASE_URL is not set" {
+		if _, err := loadConfigFile(".env"); err == nil || err.Error() != "DATABASE_URL is not set" {
 			t.Fatalf("wanted a missing DATABASE_URL error, got %v", err)
 		}
 	}
@@ -177,7 +177,7 @@ MAPBOX_ACCESS_TOKEN=file-map-token
 	if err := os.WriteFile(".env", []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := loadConfig()
+	cfg, err := loadConfigFile(".env")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ MAPBOX_ACCESS_TOKEN=file-map-token
 	t.Setenv("DATABASE_URL", "postgres://example:example@localhost:5433/cats_test")
 	t.Setenv("MAPBOX_ACCESS_TOKEN", "environment-map-token")
 	t.Setenv("CLOUDFLARE_IMAGES_DOMAIN", "")
-	cfg, err = loadConfig()
+	cfg, err = loadConfigFile(".env")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${P
 	if err := os.WriteFile(".env", []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := loadConfig()
+	cfg, err := loadConfigFile(".env")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -25,10 +25,6 @@ type config struct {
 
 // Read .env as data, without changing the process environment. Existing
 // environment variables take precedence, including explicitly empty values.
-func loadConfig() (config, error) {
-	return loadConfigFile(".env")
-}
-
 func loadConfigFile(path string) (config, error) {
 	settings, err := godotenv.Read(path)
 	if err != nil {

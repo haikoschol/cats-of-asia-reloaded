@@ -202,7 +202,7 @@ func (app *application) renderLogin(w http.ResponseWriter, status int, data temp
 }
 
 func main() {
-	cfg, err := loadConfig()
+	cfg, err := loadConfigFile(".env")
 	if err != nil {
 		log.Fatal(err)
 	}
