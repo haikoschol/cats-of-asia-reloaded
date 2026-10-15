@@ -21,6 +21,7 @@ import (
 type application struct {
 	config         config
 	db             *sql.DB
+	photosDB       *sql.DB
 	sessionManager *scs.SessionManager
 }
 
@@ -252,6 +253,15 @@ func main() {
 		return
 	}
 
+	var photosDB *sql.DB
+	if cfg.PhotosDatabaseURL != "" {
+		photosDB, err = openPhotosDatabase(cfg.PhotosDatabaseURL)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer photosDB.Close()
+	}
+
 	sessionManager := scs.New()
 	sessionManager.Store = postgresstore.New(db)
 	sessionManager.Lifetime = 12 * time.Hour
@@ -259,6 +269,7 @@ func main() {
 	app := &application{
 		config:         cfg,
 		db:             db,
+		photosDB:       photosDB,
 		sessionManager: sessionManager,
 	}
 
@@ -266,6 +277,7 @@ func main() {
 	mux.HandleFunc("/", app.home)
 	mux.HandleFunc("/login", app.login)
 	mux.HandleFunc("/logout", app.logout)
+	mux.HandleFunc("/api/photos", app.photosAPI)
 
 	log.Println("starting server on http://localhost:3000")
 	log.Fatal(http.ListenAndServe(":3000", sessionManager.LoadAndSave(mux)))

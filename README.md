@@ -166,16 +166,18 @@ environment, not in `.env.example`.
 | Setting | Purpose | Requirement |
 | --- | --- | --- |
 | `DATABASE_URL` | PostgreSQL connection, including credentials; server-only | Supply explicitly or derive from the local PostgreSQL settings |
+| `PHOTOS_DATABASE_URL` | Optional separate, read-only photo database; server-only | Leave unset to read photos from `DATABASE_URL`; use TLS for a remote source |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Local database and pgconsole credentials; server-only | Required by the development and test scripts; optional for direct execution with an explicit `DATABASE_URL` |
-| `CLOUDFLARE_IMAGES_DOMAIN` | Public image-delivery hostname, without a scheme or path | Required when displaying images |
-| `CLOUDFLARE_IMAGES_ACCOUNT_HASH` | Public account identifier used in image URLs | Required when displaying images |
+| `CLOUDFLARE_IMAGES_DOMAIN` | Public image-delivery hostname, without a scheme or path | Required when the photo API returns photos |
+| `CLOUDFLARE_IMAGES_ACCOUNT_HASH` | Public account identifier used in image URLs | Required when the photo API returns photos |
 | `MAPBOX_ACCESS_TOKEN` | Public browser token for fetching map tiles | Required when displaying a map |
 
-The current homepage does not display images or a map. Their settings are
-loaded but optional at this stage; `validateImages` and `validateMap` provide
-the checks for the future feature handlers. Creating user accounts only needs
-the database connection. Missing required settings produce a message naming
-the variable, such as `DATABASE_URL is not set`, without including its value.
+The current homepage does not display images or a map. The photo API checks the
+image domain and account hash when photos exist; an empty result needs neither.
+Map configuration remains optional until a map is implemented. Creating user
+accounts only needs the database connection. Missing required settings produce
+a message naming the variable, such as `DATABASE_URL is not set`, without
+including its value.
 
 An explicit `DATABASE_URL` is used as supplied and is not replaced by a derived
 URL. Existing `.env` files with `${POSTGRES_USER}`, `${POSTGRES_PASSWORD}`, and
@@ -186,7 +188,8 @@ credentials. Your existing `.env` does not need to be overwritten.
 The image domain and account hash identify public image URLs; neither grants
 upload access. The map setting must be a token intended for use in a browser.
 These three values can be passed to HTML or JSON when the image and map features
-are implemented. The dummy values in `.env.example` are sufficient for local
+need them; the photo API already uses the image settings to build its URLs.
+The dummy values in `.env.example` are sufficient for local
 development and configuration tests, but cannot load real Cloudflare images or
 Mapbox tiles. Replace them with the corresponding public settings when those
 features are needed.
@@ -197,6 +200,85 @@ settings: `CLOUDFLARE_IMAGES_ACCOUNT_ID`, `CLOUDFLARE_IMAGES_API_KEY`,
 by the current Go app. Keep them on the server and never pass them to templates,
 JavaScript, JSON responses, or logs. Do not log the complete configuration or
 the credential-bearing database URL.
+
+## Photo API
+
+While the local app is running, open
+[http://localhost:3000/api/photos](http://localhost:3000/api/photos) or run:
+
+```bash
+curl http://localhost:3000/api/photos
+```
+
+`GET /api/photos` returns a public JSON array of photos from the configured
+`PHOTOS_DATABASE_URL`, falling back to `DATABASE_URL` when no separate photo
+source is set. Results are ordered by capture timestamp and then UUID. An empty
+photo database returns `[]`, not `null`. Each entry contains only the fields shown in this
+example (the image settings and photo identifiers below are example values):
+
+```json
+[
+  {
+    "id": "21000000-0000-4000-8000-000000000001",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "timestamp": "2026-01-02T03:30:00Z",
+    "latitude": 13.75,
+    "longitude": 100.5,
+    "city": "Bangkok",
+    "country": "Thailand",
+    "urls": {
+      "desktop": "https://images.example.com/cdn-cgi/imagedelivery/example-account-hash/21000000-0000-4000-8000-000000000001/desktop",
+      "mobile": "https://images.example.com/cdn-cgi/imagedelivery/example-account-hash/21000000-0000-4000-8000-000000000001/mobile",
+      "smol": "https://images.example.com/cdn-cgi/imagedelivery/example-account-hash/21000000-0000-4000-8000-000000000001/smol"
+    }
+  }
+]
+```
+
+Timestamps use ISO 8601/RFC 3339 in UTC (`Z`). PostGIS X is longitude and Y is
+latitude. A photo without coordinates remains in the result, with `latitude`,
+`longitude`, `city`, and `country` explicitly set to `null`. Known empty city or
+country strings remain empty strings. All three image URLs use the same
+centrally constructed Cloudflare base URL and the photo UUID.
+
+The query runs in a read-only transaction and does not import, create, or change
+photo records. Filenames, raw EXIF metadata, and credentials are not returned.
+Other HTTP methods receive `405 Method Not Allowed`. Database, configuration,
+or JSON errors return a generic `500`; missing image-setting names are recorded
+only in the server log. Mapbox settings are not needed for this endpoint.
+
+To read existing photos without moving local accounts or sessions, add
+`PHOTOS_DATABASE_URL` to your ignored `.env`, using the connection details
+provided by the database owner. An example (not a working connection) is:
+
+```dotenv
+PHOTOS_DATABASE_URL=postgres://reader:example-password@db.example.com/photos?sslmode=require
+```
+
+The app opens that separate connection only for photo reads. Every connection
+starts with `default_transaction_read_only=on`, queries have a ten-second
+statement timeout, and the photo query additionally uses a read-only transaction.
+Photo database operations also have a twelve-second context deadline, including
+waiting for a free connection and reads through the primary database fallback.
+An earlier request cancellation or deadline is respected. The transaction ends
+before image URLs are constructed, releasing the connection promptly.
+The connection is established lazily when the API is requested. A missing or
+unavailable photo source therefore does not prevent local accounts or the
+homepage from working; an API request returns a generic `500` on connection
+failure. If the setting is empty, photo reads use the primary database as before.
+
+Use the source deployment's public `CLOUDFLARE_IMAGES_DOMAIN` and
+`CLOUDFLARE_IMAGES_ACCOUNT_HASH` for working image URLs. No private Cloudflare
+upload key or Mapbox token is needed. No production data is copied into the
+local database, so pgconsole continues to show only local records. The current
+homepage and its place menu continue to use the local database.
+
+Keep `DATABASE_URL` pointed at the local app database: user creation, sessions,
+and the development schema setup must never target the original database.
+Do not commit either real connection URL. A dedicated read-only database role
+is preferable; application-enforced read-only mode does not replace database
+access permissions. The existing source database is never migrated or seeded
+by this feature.
 
 ## User accounts
 
@@ -231,9 +313,20 @@ volume, and its network are removed automatically when the command finishes.
 The Go command reads the same configuration as the app and supplies a connection
 to `localhost:5433` to the test process using the local PostgreSQL credentials.
 The development or deployment `DATABASE_URL` is deliberately not used for tests.
+The test runner also forces `PHOTOS_DATABASE_URL` to an explicit empty value,
+overriding both the parent environment and `.env`, so tests cannot use the
+configured external photo source.
 Schema tests also check inserting related photo data in dependency order,
 geographic coordinates, cascading deletions, retaining photos without
 coordinates, and reapplying the schema without losing data.
+Photo API integration tests cover a normal record, an empty result, and a photo
+without coordinates, including UTC timestamps, longitude/latitude ordering,
+image URLs, public JSON fields, and selection of the separate photo connection.
+A targeted connection check also verifies its enforced read-only default.
+A pool-wait check verifies that a caller deadline also cancels photo reads while
+the primary database's only connection is occupied.
+Temporary tables exist only on their test connection and are removed when it
+closes; production is not used.
 
 Configuration tests set their own example environment values and check missing
 settings, `.env` loading, environment precedence, operation without a file, and

@@ -15,6 +15,7 @@ import (
 
 type config struct {
 	DatabaseURL       string `env:"DATABASE_URL"`
+	PhotosDatabaseURL string `env:"PHOTOS_DATABASE_URL"`
 	ImageDomain       string `env:"CLOUDFLARE_IMAGES_DOMAIN"`
 	ImageAccountHash  string `env:"CLOUDFLARE_IMAGES_ACCOUNT_HASH"`
 	MapboxAccessToken string `env:"MAPBOX_ACCESS_TOKEN"`
@@ -44,6 +45,7 @@ func loadConfigFile(path string) (config, error) {
 		return config{}, fmt.Errorf("cannot parse environment configuration")
 	}
 	cfg.DatabaseURL = strings.TrimSpace(cfg.DatabaseURL)
+	cfg.PhotosDatabaseURL = strings.TrimSpace(cfg.PhotosDatabaseURL)
 	cfg.ImageDomain = strings.TrimSpace(cfg.ImageDomain)
 	cfg.ImageAccountHash = strings.TrimSpace(cfg.ImageAccountHash)
 	cfg.MapboxAccessToken = strings.TrimSpace(cfg.MapboxAccessToken)

@@ -50,11 +50,13 @@ func runTests(cfg config, port string) error {
 	}
 	command := exec.Command("go", "test", "-count=1", "./...")
 	for _, assignment := range os.Environ() {
-		if !strings.HasPrefix(assignment, "DATABASE_URL=") {
+		if !strings.HasPrefix(assignment, "DATABASE_URL=") && !strings.HasPrefix(assignment, "PHOTOS_DATABASE_URL=") {
 			command.Env = append(command.Env, assignment)
 		}
 	}
 	command.Env = append(command.Env, "DATABASE_URL="+databaseURL)
+	// An explicit empty value also overrides a remote URL in the local .env.
+	command.Env = append(command.Env, "PHOTOS_DATABASE_URL=")
 	command.Stdin = os.Stdin
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
