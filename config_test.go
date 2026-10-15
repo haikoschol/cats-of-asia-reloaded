@@ -154,6 +154,7 @@ func clearConfigEnvironment(t *testing.T) {
 	t.Helper()
 	for _, name := range []string{
 		"DATABASE_URL", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB",
+		"PHOTOS_DATABASE_URL",
 		"CLOUDFLARE_IMAGES_DOMAIN", "CLOUDFLARE_IMAGES_ACCOUNT_HASH", "MAPBOX_ACCESS_TOKEN",
 	} {
 		// t.Setenv records the original value so cleanup restores it after Unsetenv.
@@ -170,6 +171,7 @@ func TestLocalDotenvConfiguration(t *testing.T) {
 	content := `POSTGRES_USER=sample
 POSTGRES_PASSWORD='sample:@/?#password'
 POSTGRES_DB=cats_sample
+PHOTOS_DATABASE_URL=' postgres://reader:example@photos.example.com/photos?sslmode=require '
 CLOUDFLARE_IMAGES_DOMAIN=images.example.com
 CLOUDFLARE_IMAGES_ACCOUNT_HASH=sample-hash
 MAPBOX_ACCESS_TOKEN=file-map-token
@@ -194,6 +196,9 @@ MAPBOX_ACCESS_TOKEN=file-map-token
 		cfg.MapboxAccessToken != "file-map-token" {
 		t.Fatal("image or map settings were not loaded from .env")
 	}
+	if cfg.PhotosDatabaseURL != "postgres://reader:example@photos.example.com/photos?sslmode=require" {
+		t.Fatal("optional photo database URL was not loaded and trimmed")
+	}
 	if _, exists := os.LookupEnv("POSTGRES_PASSWORD"); exists {
 		t.Fatal("loading .env changed the process environment")
 	}
@@ -202,12 +207,16 @@ MAPBOX_ACCESS_TOKEN=file-map-token
 	t.Setenv("DATABASE_URL", "postgres://example:example@localhost:5433/cats_test")
 	t.Setenv("MAPBOX_ACCESS_TOKEN", "environment-map-token")
 	t.Setenv("CLOUDFLARE_IMAGES_DOMAIN", "")
+	t.Setenv("PHOTOS_DATABASE_URL", "")
 	cfg, err = loadConfigFile(".env")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cfg.DatabaseURL != os.Getenv("DATABASE_URL") || cfg.MapboxAccessToken != "environment-map-token" || cfg.ImageDomain != "" {
 		t.Fatal(".env overwrote explicitly supplied environment values")
+	}
+	if cfg.PhotosDatabaseURL != "" {
+		t.Fatal("an explicit empty environment value did not disable the photo source")
 	}
 }
 
