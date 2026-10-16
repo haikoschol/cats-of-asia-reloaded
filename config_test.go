@@ -66,7 +66,8 @@ func TestConfigFeatureRequirements(t *testing.T) {
 		{name: "images without a map token", images: true,
 			cfg: config{ImageDomain: "images.example.com", ImageAccountHash: "example-account-hash"}},
 		{name: "missing map token", wantErr: "MAPBOX_ACCESS_TOKEN is not set"},
-		{name: "map without image settings", cfg: config{MapboxAccessToken: "example-public-map-token"}},
+		{name: "map without image settings", cfg: config{MapboxAccessToken: "pk.example-public-map-token"}},
+		{name: "reject secret map token", cfg: config{MapboxAccessToken: "sk.fake-secret-token"}, wantErr: "MAPBOX_ACCESS_TOKEN must be a public browser token starting with pk."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

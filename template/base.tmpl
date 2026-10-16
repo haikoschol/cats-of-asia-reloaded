@@ -7,11 +7,13 @@
   <title>{{block "title" .}}Cats of Asia{{end}}</title>
 
   <link rel="icon" href="/static/icons/cat.svg" type="image/svg+xml">
+  {{block "pageStyles" .}}{{end}}
   <link rel="stylesheet" href="/static/css/style.css">
   <script src="/static/js/places.js" defer></script>
+  {{block "pageScripts" .}}{{end}}
 </head>
 
-<body>
+<body class="{{block "bodyClass" .}}{{end}}">
   {{template "header" .}}
 
   <main>

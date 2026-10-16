@@ -1,5 +1,24 @@
 {{define "title"}}Cats of Asia{{end}}
 
+{{define "bodyClass"}}map-layout{{end}}
+
+{{define "pageStyles"}}
+  <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+{{end}}
+
+{{define "pageScripts"}}
+  <script src="/static/vendor/leaflet/leaflet.js" defer></script>
+  <script src="/static/js/map.js" defer></script>
+{{end}}
+
 {{define "content"}}
-  <h1 id="selected-place" class="selected-place" role="status">No place selected</h1>
+  <section class="map-page" aria-label="Photo map">
+    <h1 id="selected-place" class="selected-place visually-hidden" role="status">No place selected</h1>
+    <div class="map-messages">
+      <p id="map-status" role="status"{{if not .MapError}} hidden{{end}}>{{if .MapError}}{{.MapError}}{{else}}Loading map…{{end}}</p>
+      <p id="photo-status" role="status" hidden></p>
+    </div>
+    <div id="photo-map" class="map-container" data-mapbox-token="{{.MapboxAccessToken}}" aria-label="Interactive map" aria-describedby="map-status"></div>
+    <noscript><p>Enable JavaScript to view the interactive map.</p></noscript>
+  </section>
 {{end}}

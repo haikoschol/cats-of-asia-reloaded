@@ -49,7 +49,7 @@ func TestHome(t *testing.T) {
 	privateSettings := setPrivateTestCredentials(t)
 	t.Setenv("CLOUDFLARE_IMAGES_DOMAIN", "images.example.com")
 	t.Setenv("CLOUDFLARE_IMAGES_ACCOUNT_HASH", "example-account-hash")
-	t.Setenv("MAPBOX_ACCESS_TOKEN", "example-public-map-token")
+	t.Setenv("MAPBOX_ACCESS_TOKEN", "pk.example-public-map-token")
 	cfg, err := loadConfigFile(".env")
 	if err != nil {
 		t.Fatal(err)
@@ -110,16 +110,40 @@ func TestHome(t *testing.T) {
 		`<title>Cats of Asia</title>`,
 		`<link rel="stylesheet" href="/static/css/style.css">`,
 		`<script src="/static/js/places.js" defer></script>`,
+		`<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">`,
+		`<script src="/static/vendor/leaflet/leaflet.js" defer></script>`,
+		`<script src="/static/js/map.js" defer></script>`,
+		`id="photo-map"`,
+		`id="photo-status" role="status"`,
+		`data-mapbox-token="pk.example-public-map-token"`,
 		`<header class="site-header">`,
 		`Cats of Asia`,
 		`<summary id="places-toggle">Places</summary>`,
-		`<h1 id="selected-place" class="selected-place" role="status">No place selected</h1>`,
+		`<body class="map-layout">`,
+		`<h1 id="selected-place" class="selected-place visually-hidden" role="status">No place selected</h1>`,
+		`id="map-status" role="status" hidden`,
+		`id="photo-status" role="status" hidden`,
 		`Bali, Indonesia`,
 		`Vientiane, Laos`,
 		`Kuala Lumpur, Malaysia`,
 	} {
 		if !strings.Contains(string(body), content) {
 			t.Errorf("homepage did not contain %q", content)
+		}
+	}
+
+	for _, token := range []string{"", "sk.fake-secret-token"} {
+		app.config.MapboxAccessToken = token
+		w := httptest.NewRecorder()
+		app.routes().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Map unavailable:") {
+			t.Error("missing or private map token did not produce a helpful homepage message")
+		}
+		if !strings.Contains(w.Body.String(), `data-mapbox-token=""`) || strings.Contains(w.Body.String(), "sk.fake-secret-token") {
+			t.Error("homepage exposed an invalid or private map token")
+		}
+		if strings.Contains(w.Body.String(), `id="map-status" role="status" hidden`) {
+			t.Error("homepage hid the missing/invalid map token message")
 		}
 	}
 }
@@ -174,6 +198,9 @@ func TestLoginLayout(t *testing.T) {
 			}
 			if strings.Count(body, "<!doctype html>") != 1 || strings.Contains(body, `id="selected-place"`) || strings.Contains(body, "const selectedPlace") {
 				t.Error("login layout contains duplicate markup or homepage content/scripts")
+			}
+			if strings.Contains(body, "/static/vendor/leaflet/") || strings.Contains(body, "/static/js/map.js") {
+				t.Error("login page loaded the homepage-only Leaflet assets")
 			}
 			if tt.method == http.MethodPost {
 				if !strings.Contains(body, "Username and password are required.") || !strings.Contains(body, `value="&lt;script&gt;"`) {
