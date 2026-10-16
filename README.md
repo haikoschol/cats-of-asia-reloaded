@@ -60,6 +60,18 @@ Reloading the page or opening that link restores the selection, provided the
 place exists in that database. The browser's Back and Forward buttons restore
 earlier selections. Missing or unknown IDs display **No place selected**.
 
+The homepage and login page share `template/base.tmpl` and the header. The
+Places menu is also available on the login page; selecting a place there opens
+the homepage with that selection. Escape closes the menu and returns focus to
+its toggle; clicking outside also closes it.
+
+Go serves the shared stylesheet, place-selector JavaScript, and SVG site icon
+from `static/` under `/static/`. Missing static files return 404. These assets are
+maintained in this repository; no third-party frontend library, CDN, or separate
+frontend build is required. Run the app from the repository root so both
+`template/` and `static/` can be found. Changes to CSS or JavaScript do not require
+recompiling Go; reload the browser (bypassing its cache if needed).
+
 Press `Ctrl+C` to stop the web application and remove the database and pgconsole
 containers. Database contents remain in the `postgres18-data` Docker volume.
 The containers are also cleaned up when a command exits or startup fails.

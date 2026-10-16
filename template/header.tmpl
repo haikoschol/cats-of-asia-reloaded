@@ -6,7 +6,7 @@
     <summary id="places-toggle">Places</summary>
     <ul class="place-list">
       {{range .Locations}}
-        <li><button class="place-option" type="button" data-place-id="{{.ID}}">{{if .City}}{{.City}}{{if .Country}}, {{.Country}}{{end}}{{else if .Country}}{{.Country}}{{else}}an undisclosed location{{end}}</button></li>
+        <li><a class="place-option" href="/?place={{.ID}}" data-place-id="{{.ID}}">{{if .City}}{{.City}}{{if .Country}}, {{.Country}}{{end}}{{else if .Country}}{{.Country}}{{else}}an undisclosed location{{end}}</a></li>
       {{end}}
     </ul>
   </details>

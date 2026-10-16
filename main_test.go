@@ -77,9 +77,7 @@ func TestHome(t *testing.T) {
 		sessionManager: sessionManager,
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", app.home)
-	server := httptest.NewServer(sessionManager.LoadAndSave(mux))
+	server := httptest.NewServer(app.routes())
 	defer server.Close()
 
 	response, err := server.Client().Get(server.URL + "/")
@@ -109,6 +107,9 @@ func TestHome(t *testing.T) {
 		t.Error("homepage exposed the database connection URL")
 	}
 	for _, content := range []string{
+		`<title>Cats of Asia</title>`,
+		`<link rel="stylesheet" href="/static/css/style.css">`,
+		`<script src="/static/js/places.js" defer></script>`,
 		`<header class="site-header">`,
 		`Cats of Asia`,
 		`<summary id="places-toggle">Places</summary>`,
@@ -120,5 +121,65 @@ func TestHome(t *testing.T) {
 		if !strings.Contains(string(body), content) {
 			t.Errorf("homepage did not contain %q", content)
 		}
+	}
+}
+
+func TestLoginLayout(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Fatal("run integration tests with ./scripts/run-tests.sh")
+	}
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	sessionManager := scs.New()
+	app := &application{db: db, sessionManager: sessionManager}
+	handler := app.routes()
+
+	for _, tt := range []struct {
+		name, method, form string
+		status             int
+	}{
+		{name: "form", method: http.MethodGet, status: http.StatusOK},
+		{name: "required fields", method: http.MethodPost,
+			form: "username=%3Cscript%3E", status: http.StatusUnprocessableEntity},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest(tt.method, "/login", strings.NewReader(tt.form))
+			if tt.method == http.MethodPost {
+				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			}
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != tt.status {
+				t.Fatalf("wanted status %d, got %d: %s", tt.status, w.Code, w.Body.String())
+			}
+			body := w.Body.String()
+			for _, content := range []string{
+				`<title>Log in | Cats of Asia</title>`,
+				`<meta name="viewport" content="width=device-width, initial-scale=1">`,
+				`<header class="site-header">`,
+				`<link rel="stylesheet" href="/static/css/style.css">`,
+				`<script src="/static/js/places.js" defer></script>`,
+				`Bali, Indonesia`,
+				`<a class="place-option" href="/?place=`,
+				`<form class="login-form" action="/login" method="post">`,
+				`type="password"`,
+			} {
+				if !strings.Contains(body, content) {
+					t.Errorf("login page did not contain %q", content)
+				}
+			}
+			if strings.Count(body, "<!doctype html>") != 1 || strings.Contains(body, `id="selected-place"`) || strings.Contains(body, "const selectedPlace") {
+				t.Error("login layout contains duplicate markup or homepage content/scripts")
+			}
+			if tt.method == http.MethodPost {
+				if !strings.Contains(body, "Username and password are required.") || !strings.Contains(body, `value="&lt;script&gt;"`) {
+					t.Error("form error or safely escaped username missing")
+				}
+			}
+		})
 	}
 }

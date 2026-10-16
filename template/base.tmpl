@@ -1,0 +1,23 @@
+{{define "base"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{block "title" .}}Cats of Asia{{end}}</title>
+
+  <link rel="icon" href="/static/icons/cat.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="/static/js/places.js" defer></script>
+</head>
+
+<body>
+  {{template "header" .}}
+
+  <main>
+    {{block "content" .}}{{end}}
+  </main>
+
+</body>
+</html>
+{{end}}
