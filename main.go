@@ -85,24 +85,12 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmpl, err := template.ParseFiles("./template/home.tmpl", "./template/header.tmpl")
-	if err != nil {
-		log.Printf("template parse error: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
 	data := templateData{
 		Authenticated: authenticated,
 		Locations:     locations,
 	}
 
-	err = tmpl.ExecuteTemplate(w, "home.tmpl", data)
-	if err != nil {
-		log.Printf("template execution error: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
+	app.renderPage(w, http.StatusOK, "home.tmpl", data)
 }
 
 func (app *application) logout(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +117,7 @@ func (app *application) login(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		app.renderLogin(w, http.StatusOK, templateData{})
+		app.renderLogin(w, r, http.StatusOK, templateData{})
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
@@ -140,7 +128,7 @@ func (app *application) login(w http.ResponseWriter, r *http.Request) {
 		password := r.PostForm.Get("password")
 
 		if username == "" || password == "" {
-			app.renderLogin(w, http.StatusUnprocessableEntity, templateData{
+			app.renderLogin(w, r, http.StatusUnprocessableEntity, templateData{
 				Username:  username,
 				FormError: "Username and password are required.",
 			})
@@ -154,7 +142,7 @@ func (app *application) login(w http.ResponseWriter, r *http.Request) {
 			username,
 		).Scan(&userID, &hashedPassword)
 		if err == sql.ErrNoRows {
-			app.renderLogin(w, http.StatusUnauthorized, templateData{
+			app.renderLogin(w, r, http.StatusUnauthorized, templateData{
 				Username:  username,
 				FormError: "Username or password is incorrect.",
 			})
@@ -167,7 +155,7 @@ func (app *application) login(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password)) != nil {
-			app.renderLogin(w, http.StatusUnauthorized, templateData{
+			app.renderLogin(w, r, http.StatusUnauthorized, templateData{
 				Username:  username,
 				FormError: "Username or password is incorrect.",
 			})
@@ -188,18 +176,47 @@ func (app *application) login(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (app *application) renderLogin(w http.ResponseWriter, status int, data templateData) {
-	tmpl, err := template.ParseFiles("./template/login.tmpl")
+func (app *application) renderLogin(w http.ResponseWriter, r *http.Request, status int, data templateData) {
+	locations, err := app.locations(r.Context())
+	if err != nil {
+		log.Printf("location query error: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	data.Locations = locations
+	app.renderPage(w, status, "login.tmpl", data)
+}
+
+func (app *application) renderPage(w http.ResponseWriter, status int, page string, data templateData) {
+	// Parse one page at a time so its blocks cannot overwrite another page's.
+	tmpl, err := template.ParseFiles("./template/base.tmpl", "./template/header.tmpl", "./template/"+page)
 	if err != nil {
 		log.Printf("template parse error: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(status)
-	if err := tmpl.ExecuteTemplate(w, "login.tmpl", data); err != nil {
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, "base", data); err != nil {
 		log.Printf("template execution error: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	if _, err := buf.WriteTo(w); err != nil {
+		log.Printf("template response error: %v", err)
+	}
+}
+
+func (app *application) routes() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", app.home)
+	mux.HandleFunc("/login", app.login)
+	mux.HandleFunc("/logout", app.logout)
+	mux.HandleFunc("/api/photos", app.photosAPI)
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
+	return app.sessionManager.LoadAndSave(mux)
 }
 
 func main() {
@@ -273,14 +290,8 @@ func main() {
 		sessionManager: sessionManager,
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", app.home)
-	mux.HandleFunc("/login", app.login)
-	mux.HandleFunc("/logout", app.logout)
-	mux.HandleFunc("/api/photos", app.photosAPI)
-
 	log.Println("starting server on http://localhost:3000")
-	log.Fatal(http.ListenAndServe(":3000", sessionManager.LoadAndSave(mux)))
+	log.Fatal(http.ListenAndServe(":3000", app.routes()))
 }
 
 func createUser(db *sql.DB, username string) error {

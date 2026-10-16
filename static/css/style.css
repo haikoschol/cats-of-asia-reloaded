@@ -1,0 +1,125 @@
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #050505;
+  color: #00ff41;
+  font-family: "Courier New", monospace;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1rem;
+  border-bottom: 1px solid #008f11;
+}
+
+.site-name {
+  color: inherit;
+  font-size: 1.25rem;
+  font-weight: bold;
+  text-decoration: none;
+}
+
+.place-picker {
+  position: relative;
+}
+
+.place-picker summary {
+  padding: 0.5rem;
+  cursor: pointer;
+}
+
+.place-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 1;
+  min-width: 12rem;
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 2rem));
+  max-height: 60vh;
+  overflow-y: auto;
+  margin: 0.5rem 0 0;
+  padding: 0.25rem;
+  list-style: none;
+  background: #050505;
+  border: 1px solid #008f11;
+}
+
+.place-option {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  padding: 0.75rem;
+  font: inherit;
+  background: #050505;
+  color: inherit;
+  border: 0;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.place-option:hover,
+.place-option:focus-visible {
+  background: #008f11;
+  color: #050505;
+}
+
+@media (max-width: 480px) {
+  .place-picker {
+    width: 100%;
+  }
+}
+
+main {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.logout-form {
+  margin-left: auto;
+}
+
+.logout {
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.selected-place {
+  margin: 0;
+  font-size: clamp(2rem, 7vw, 6rem);
+  text-align: center;
+  text-shadow:
+    0 0 8px #00ff41,
+    0 0 20px #00ff41,
+    0 0 45px #008f11;
+}
+
+.login-form {
+  width: min(24rem, calc(100vw - 3rem));
+  display: grid;
+  gap: 0.75rem;
+}
+
+.login-form input,
+.login-form button {
+  box-sizing: border-box;
+  padding: 0.75rem;
+  font: inherit;
+}
+
+.login-form button {
+  cursor: pointer;
+}
+
+.error {
+  color: #ff5f5f;
+}

@@ -1,44 +1,7 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Log in</title>
+{{define "title"}}Log in | Cats of Asia{{end}}
 
-  <style>
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      background: #050505;
-      color: #00ff41;
-      font-family: "Courier New", monospace;
-    }
-
-    form {
-      width: min(24rem, calc(100vw - 3rem));
-      display: grid;
-      gap: 0.75rem;
-    }
-
-    input, button {
-      box-sizing: border-box;
-      padding: 0.75rem;
-      font: inherit;
-    }
-
-    button {
-      cursor: pointer;
-    }
-
-    .error {
-      color: #ff5f5f;
-    }
-  </style>
-</head>
-
-<body>
-  <form action="/login" method="post">
+{{define "content"}}
+  <form class="login-form" action="/login" method="post">
     <h1>Log in</h1>
 
     {{if .FormError}}
@@ -53,5 +16,4 @@
 
     <button type="submit">Log in</button>
   </form>
-</body>
-</html>
+{{end}}
