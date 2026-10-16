@@ -48,29 +48,67 @@ its container settings from `.env`; the script does not source the file.
 Open [http://localhost:3000/](http://localhost:3000/) in a browser.
 
 The header shows **Cats of Asia** and a **Places** menu populated from
-`photos_location`. Click **Places** to open the list, then select a place to
-display its city and country in the center of the page without reloading it.
-The menu closes after selection and its label remains **Places**. Before a
-selection, the page displays **No place selected**. If there are no places, the
+`photos_location`. Click **Places** to open the list and select a place without
+reloading the homepage. The menu closes after selection and its label remains
+**Places**. The selected-place heading is retained for assistive technology,
+but is not visually displayed above the map. If there are no places, the
 menu contains an empty list. The three example places are available automatically
 after startup; additional database entries also appear in the menu.
 
 Selecting a place stores its database ID in the URL, for example `/?place=1`.
 Reloading the page or opening that link restores the selection, provided the
 place exists in that database. The browser's Back and Forward buttons restore
-earlier selections. Missing or unknown IDs display **No place selected**.
+earlier selections. Missing or unknown IDs leave no place selected.
 
 The homepage and login page share `template/base.tmpl` and the header. The
 Places menu is also available on the login page; selecting a place there opens
 the homepage with that selection. Escape closes the menu and returns focus to
 its toggle; clicking outside also closes it.
 
-Go serves the shared stylesheet, place-selector JavaScript, and SVG site icon
-from `static/` under `/static/`. Missing static files return 404. These assets are
-maintained in this repository; no third-party frontend library, CDN, or separate
-frontend build is required. Run the app from the repository root so both
+Go serves the shared stylesheet, place-selector JavaScript, SVG site icon, and
+vendored frontend assets from `static/` under `/static/`. Missing static files
+return 404. No CDN, package installation, or separate frontend build is required
+to run the app. Run the app from the repository root so both
 `template/` and `static/` can be found. Changes to CSS or JavaScript do not require
 recompiling Go; reload the browser (bypassing its cache if needed).
+
+The homepage additionally loads the pinned Leaflet 1.9.4 JavaScript and CSS from
+`static/vendor/leaflet/`; the login page does not load Leaflet. The upstream
+BSD-2-Clause license, asset provenance, and integrity values are retained in
+[the vendored Leaflet directory](static/vendor/leaflet/README.md).
+
+### Homepage map
+
+Set `MAPBOX_ACCESS_TOKEN` in your ignored `.env` to a working **public** Mapbox
+browser token starting with `pk.`, then start or restart `./scripts/run.sh`.
+Open [http://localhost:3000](http://localhost:3000) to see the map. The browser
+loads `/api/photos` and places a red circle for each photo with valid latitude and
+longitude. The initial view fits all markers, with a maximum initial zoom of 14
+so a single photo does not zoom in too far. If there are no photos with valid
+coordinates, the map stays centered on Southeast Asia and displays a message.
+Photos without valid coordinates are skipped. The normal view shows only the
+header and the map, without a selected-place heading, instructions, or photo
+count above it. There is no divider line below the header, and the map fills
+the remaining window height. Drag to pan and use the +/− buttons or mouse wheel
+to zoom. The browser fetches Mapbox Streets v12 raster tiles directly; internet
+access is needed. Tile requests count towards the Mapbox account's usage.
+If the token has URL restrictions, allow `http://localhost:3000` for local work
+and the actual site URL for deployment. Never use a secret `sk.` token here.
+
+Missing configuration, tile-loading failures, and photo API failures produce
+visible notices over the map. Empty photo results also show a notice. Tile
+and photo messages are separate so one
+cannot hide the other's errors. Photo requests time out after 15 seconds;
+reload the page to retry a failed request. The rest of the page and login
+remain available. The map includes
+Leaflet, Mapbox, and OpenStreetMap attribution, an Improve this map link, and
+the official Mapbox logo. Keep these visible when changing the layout.
+
+Markers currently show photo locations, not image previews. Photos at the same
+coordinates overlap; grouping and previews will be added separately. Selecting
+a place still updates its screen-reader heading and URL, not the map view. Opening the map
+reads the configured photo source through the existing read-only API; it does
+not import or modify photo records. It does not fetch the photo images.
 
 Press `Ctrl+C` to stop the web application and remove the database and pgconsole
 containers. Database contents remain in the `postgres18-data` Docker volume.
@@ -184,9 +222,10 @@ environment, not in `.env.example`.
 | `CLOUDFLARE_IMAGES_ACCOUNT_HASH` | Public account identifier used in image URLs | Required when the photo API returns photos |
 | `MAPBOX_ACCESS_TOKEN` | Public browser token for fetching map tiles | Required when displaying a map |
 
-The current homepage does not display images or a map. The photo API checks the
-image domain and account hash when photos exist; an empty result needs neither.
-Map configuration remains optional until a map is implemented. Creating user
+The homepage displays a map with photo markers when a public Mapbox token is
+configured; it does not display photo images yet. The photo API checks the
+image domain and account hash
+when photos exist; an empty result needs neither. Creating user
 accounts only needs the database connection. Missing required settings produce
 a message naming the variable, such as `DATABASE_URL is not set`, without
 including its value.
@@ -282,8 +321,9 @@ failure. If the setting is empty, photo reads use the primary database as before
 Use the source deployment's public `CLOUDFLARE_IMAGES_DOMAIN` and
 `CLOUDFLARE_IMAGES_ACCOUNT_HASH` for working image URLs. No private Cloudflare
 upload key or Mapbox token is needed. No production data is copied into the
-local database, so pgconsole continues to show only local records. The current
-homepage and its place menu continue to use the local database.
+local database, so pgconsole continues to show only local records. Accounts,
+sessions, and the homepage's Places menu continue to use the local database;
+map markers use the photo source returned by `/api/photos`.
 
 Keep `DATABASE_URL` pointed at the local app database: user creation, sessions,
 and the development schema setup must never target the original database.

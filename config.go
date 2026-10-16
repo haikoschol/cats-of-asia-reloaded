@@ -77,6 +77,9 @@ func (cfg config) validateMap() error {
 	if cfg.MapboxAccessToken == "" {
 		return fmt.Errorf("MAPBOX_ACCESS_TOKEN is not set")
 	}
+	if !strings.HasPrefix(cfg.MapboxAccessToken, "pk.") {
+		return fmt.Errorf("MAPBOX_ACCESS_TOKEN must be a public browser token starting with pk.")
+	}
 	return nil
 }
 

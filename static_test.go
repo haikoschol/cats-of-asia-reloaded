@@ -18,7 +18,12 @@ func TestStaticAssets(t *testing.T) {
 	}{
 		{path: "/static/css/style.css", contentType: "text/css", content: ".site-header", status: http.StatusOK},
 		{path: "/static/js/places.js", contentType: "javascript", content: "updateSelectedPlace", status: http.StatusOK},
+		{path: "/static/js/map.js", contentType: "javascript", content: "L.map(container)", status: http.StatusOK},
+		{path: "/static/vendor/mapbox/mapbox-logo.svg", contentType: "image/svg+xml", content: "<svg", status: http.StatusOK},
 		{path: "/static/icons/cat.svg", contentType: "image/svg+xml", content: "<svg", status: http.StatusOK},
+		{path: "/static/vendor/leaflet/leaflet.css", contentType: "text/css", content: ".leaflet-container", status: http.StatusOK},
+		{path: "/static/vendor/leaflet/leaflet.js", contentType: "javascript", content: "Leaflet 1.9.4", status: http.StatusOK},
+		{path: "/static/vendor/leaflet/images/marker-icon.png", contentType: "image/png", status: http.StatusOK},
 		{path: "/static/missing.css", status: http.StatusNotFound},
 		{path: "/static/.env", status: http.StatusNotFound},
 		{path: "/static/%2e%2e/.env", status: http.StatusNotFound},
