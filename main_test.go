@@ -124,8 +124,11 @@ func TestHome(t *testing.T) {
 		`id="map-status" role="status" hidden`,
 		`id="photo-status" role="status" hidden`,
 		`Bali, Indonesia`,
+		`data-place-city="Bali" data-place-country="Indonesia"`,
 		`Vientiane, Laos`,
+		`data-place-city="Vientiane" data-place-country="Laos"`,
 		`Kuala Lumpur, Malaysia`,
+		`data-place-city="Kuala Lumpur" data-place-country="Malaysia"`,
 	} {
 		if !strings.Contains(string(body), content) {
 			t.Errorf("homepage did not contain %q", content)

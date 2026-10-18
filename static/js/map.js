@@ -66,6 +66,51 @@
 
   const photoStatus = document.getElementById("photo-status");
   const markers = L.featureGroup().addTo(map);
+  const photosByPlace = new Map();
+  let photosLoaded = false;
+  let totalPhotos = 0;
+
+  function showOverview() {
+    photoStatus.hidden = true;
+    const count = markers.getLayers().length;
+    if (count > 0) {
+      map.fitBounds(markers.getBounds(), { padding: [32, 32], maxZoom: 14 });
+      photoStatus.textContent = `Showing ${count} of ${totalPhotos} photos on the map.`;
+      if (count < totalPhotos) {
+        photoStatus.textContent += " Photos without valid coordinates are not shown.";
+      }
+    } else {
+      map.setView([15, 105], 4);
+      photoStatus.hidden = false;
+      photoStatus.textContent = totalPhotos === 0
+        ? "No photos available yet."
+        : "No photos with valid coordinates are available.";
+    }
+  }
+
+  function showSelectedPlace() {
+    if (!photosLoaded) return;
+
+    // Changing the menu label may change the header and map height.
+    map.invalidateSize({ pan: false });
+    const placeId = new URL(window.location.href).searchParams.get("place");
+    if (!photosByPlace.has(placeId)) {
+      showOverview();
+      return;
+    }
+
+    const photo = photosByPlace.get(placeId)[0];
+    if (!photo) {
+      photoStatus.textContent = "No photos with valid coordinates are available for this place.";
+      photoStatus.hidden = false;
+      return;
+    }
+
+    photoStatus.hidden = true;
+    map.setView([photo.latitude, photo.longitude], 14);
+  }
+
+  window.addEventListener("placechange", showSelectedPlace);
 
   async function loadPhotos() {
     photoStatus.textContent = "Loading photos…";
@@ -79,12 +124,17 @@
       const photos = await response.json();
       if (!Array.isArray(photos)) throw new Error("Invalid photo response");
 
+      const photosByLocation = new Map();
       for (const photo of photos) {
         if (!photo ||
             !Number.isFinite(photo.latitude) || Math.abs(photo.latitude) > 90 ||
             !Number.isFinite(photo.longitude) || Math.abs(photo.longitude) > 180) {
           continue;
         }
+        const locationKey = JSON.stringify([photo.city ?? "", photo.country ?? ""]);
+        if (!photosByLocation.has(locationKey)) photosByLocation.set(locationKey, []);
+        photosByLocation.get(locationKey).push(photo);
+
         L.circleMarker([photo.latitude, photo.longitude], {
           radius: 6,
           color: "red",
@@ -94,20 +144,20 @@
         }).addTo(markers);
       }
 
-      const count = markers.getLayers().length;
-      if (count > 0) {
-        map.fitBounds(markers.getBounds(), { padding: [32, 32], maxZoom: 14 });
-        photoStatus.textContent = `Showing ${count} of ${photos.length} photos on the map.`;
-        if (count < photos.length) {
-          photoStatus.textContent += " Photos without valid coordinates are not shown.";
-        }
-      } else {
-        photoStatus.hidden = false;
-        photoStatus.textContent = photos.length === 0
-          ? "No photos available yet."
-          : "No photos with valid coordinates are available.";
+      // Local place IDs need not match IDs in the separate photo database.
+      for (const option of document.querySelectorAll(".place-option")) {
+        const { placeId, placeCity, placeCountry } = option.dataset;
+        const locationKey = JSON.stringify([placeCity, placeCountry]);
+        photosByPlace.set(placeId, photosByLocation.get(locationKey) ?? []);
       }
+
+      totalPhotos = photos.length;
+      photosLoaded = true;
+      // Read the current URL, including selections made while photos loaded.
+      showSelectedPlace();
     } catch {
+      photosLoaded = false;
+      photosByPlace.clear();
       markers.clearLayers();
       photoStatus.textContent = "Photos could not be loaded. Please reload the page to try again.";
       photoStatus.hidden = false;

@@ -9,11 +9,13 @@ function updateSelectedPlace() {
   const placeID = new URL(window.location.href).searchParams.get("place");
   const option = placeOptions.find((option) => option.dataset.placeId === placeID);
   selectedPlace.textContent = option ? option.textContent.trim() : "No place selected";
+  placesToggle.textContent = option ? option.textContent.trim() : "Places";
   places.open = false;
+  window.dispatchEvent(new Event("placechange"));
 }
 
-// Only the homepage displays a selected place. On other pages the links
-// navigate there normally instead of trying to update missing page content.
+// Only the homepage handles selection without navigation. On other pages
+// the links navigate there normally instead of updating missing page content.
 if (selectedPlace) {
   placeOptions.forEach((option) => {
     option.addEventListener("click", (event) => {
