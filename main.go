@@ -9,13 +9,12 @@ import (
 
 	"github.com/alexedwards/scs/postgresstore"
 	"github.com/alexedwards/scs/v2"
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type application struct {
 	config         config
-	db             *sql.DB
-	photosDB       *sql.DB
+	contentDB      *sql.DB
+	usersDB        *sql.DB
 	sessionManager *scs.SessionManager
 }
 
@@ -52,41 +51,38 @@ func main() {
 		}
 	}
 
-	db, err := sql.Open("pgx", cfg.DatabaseURL)
+	usersDB, err := openUsersDatabase(cfg.UsersDatabaseURL)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
-
-	if err := db.Ping(); err != nil {
-		log.Fatal(err)
-	}
+	defer usersDB.Close()
 
 	if len(os.Args) > 1 {
-		if err := createUser(db, os.Args[2]); err != nil {
+		if err := createUser(usersDB, os.Args[2]); err != nil {
 			log.Fatal(err)
 		}
 
 		return
 	}
 
-	var photosDB *sql.DB
-	if cfg.PhotosDatabaseURL != "" {
-		photosDB, err = openPhotosDatabase(cfg.PhotosDatabaseURL)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer photosDB.Close()
+	contentDB, err := openContentDatabase(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer contentDB.Close()
+
+	if err := usersDB.Ping(); err != nil {
+		log.Fatal(err)
 	}
 
 	sessionManager := scs.New()
-	sessionManager.Store = postgresstore.New(db)
+	sessionManager.Store = postgresstore.New(usersDB)
 	sessionManager.Lifetime = 12 * time.Hour
 
 	app := &application{
 		config:         cfg,
-		db:             db,
-		photosDB:       photosDB,
+		contentDB:      contentDB,
+		usersDB:        usersDB,
 		sessionManager: sessionManager,
 	}
 

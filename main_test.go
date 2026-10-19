@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
@@ -14,17 +14,14 @@ import (
 )
 
 func TestLocations(t *testing.T) {
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		t.Fatal("DATABASE_URL is not set")
-	}
+	databaseURL := testDatabaseURL(t)
 	db, err := sql.Open("pgx", databaseURL)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
 
-	app := &application{db: db}
+	app := &application{contentDB: db}
 	locations, err := app.locations(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -55,10 +52,7 @@ func TestHome(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		t.Fatal("DATABASE_URL is not set")
-	}
+	databaseURL := testDatabaseURL(t)
 
 	db, err := sql.Open("pgx", databaseURL)
 	if err != nil {
@@ -73,7 +67,8 @@ func TestHome(t *testing.T) {
 	sessionManager := scs.New()
 	app := &application{
 		config:         cfg,
-		db:             db,
+		contentDB:      db,
+		usersDB:        db,
 		sessionManager: sessionManager,
 	}
 
@@ -124,14 +119,21 @@ func TestHome(t *testing.T) {
 		`id="map-status" role="status" hidden`,
 		`id="photo-status" role="status" hidden`,
 		`Bali, Indonesia`,
-		`data-place-city="Bali" data-place-country="Indonesia"`,
 		`Vientiane, Laos`,
-		`data-place-city="Vientiane" data-place-country="Laos"`,
 		`Kuala Lumpur, Malaysia`,
-		`data-place-city="Kuala Lumpur" data-place-country="Malaysia"`,
 	} {
 		if !strings.Contains(string(body), content) {
 			t.Errorf("homepage did not contain %q", content)
+		}
+	}
+	locations, err := app.locations(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, place := range locations {
+		link := fmt.Sprintf(`href="/?place=%d" data-place-id="%d"`, place.ID, place.ID)
+		if !strings.Contains(string(body), link) {
+			t.Errorf("homepage did not link place ID %d", place.ID)
 		}
 	}
 
@@ -152,17 +154,14 @@ func TestHome(t *testing.T) {
 }
 
 func TestLoginLayout(t *testing.T) {
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		t.Fatal("run integration tests with ./scripts/run-tests.sh")
-	}
+	databaseURL := testDatabaseURL(t)
 	db, err := sql.Open("pgx", databaseURL)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
 	sessionManager := scs.New()
-	app := &application{db: db, sessionManager: sessionManager}
+	app := &application{contentDB: db, usersDB: db, sessionManager: sessionManager}
 	handler := app.routes()
 
 	for _, tt := range []struct {

@@ -13,7 +13,7 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 
 	if app.sessionManager.Exists(r.Context(), "authenticatedUserID") {
 		userID := app.sessionManager.GetInt(r.Context(), "authenticatedUserID")
-		err := app.db.QueryRowContext(r.Context(), "SELECT id FROM users WHERE id = $1", userID).Scan(&userID)
+		err := app.usersDB.QueryRowContext(r.Context(), "SELECT id FROM users WHERE id = $1", userID).Scan(&userID)
 		if err == sql.ErrNoRows {
 			app.sessionManager.Remove(r.Context(), "authenticatedUserID")
 		} else if err != nil {
@@ -89,7 +89,7 @@ func (app *application) login(w http.ResponseWriter, r *http.Request) {
 
 		var userID int
 		var hashedPassword string
-		err := app.db.QueryRow(
+		err := app.usersDB.QueryRow(
 			"SELECT id, hashed_password FROM users WHERE username = $1",
 			username,
 		).Scan(&userID, &hashedPassword)

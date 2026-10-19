@@ -26,8 +26,10 @@ if ! test_compose up --wait --wait-timeout 120 db; then
   exit 1
 fi
 
-test_compose exec -T db sh -c \
-  'exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
-  < scripts/schema.sql
+for SQL_FILE in scripts/schema.sql scripts/test-data.sql; do
+  test_compose exec -T db sh -c \
+    'exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+    < "$SQL_FILE"
+done
 
 ./cats-of-asia-reloaded run-tests "$TEST_PORT"

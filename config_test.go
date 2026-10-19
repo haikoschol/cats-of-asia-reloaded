@@ -14,6 +14,7 @@ func TestLoadConfig(t *testing.T) {
 	t.Chdir(t.TempDir())
 	setPrivateTestCredentials(t)
 	t.Setenv("DATABASE_URL", "postgres://example:example@localhost:5433/cats_test")
+	t.Setenv("USERS_DATABASE_URL", "postgres://example:example@localhost:5433/users_test")
 	t.Setenv("CLOUDFLARE_IMAGES_DOMAIN", "images.example.com")
 	t.Setenv("CLOUDFLARE_IMAGES_ACCOUNT_HASH", "example-account-hash")
 	t.Setenv("MAPBOX_ACCESS_TOKEN", "example-public-map-token")
@@ -24,6 +25,7 @@ func TestLoadConfig(t *testing.T) {
 	}
 	want := config{
 		DatabaseURL:       "postgres://example:example@localhost:5433/cats_test",
+		UsersDatabaseURL:  "postgres://example:example@localhost:5433/users_test",
 		ImageDomain:       "images.example.com",
 		ImageAccountHash:  "example-account-hash",
 		MapboxAccessToken: "example-public-map-token",
@@ -33,7 +35,7 @@ func TestLoadConfig(t *testing.T) {
 		t.Fatal("configuration did not match the example values")
 	}
 
-	// Creating an account and running the current homepage need only the database.
+	// Database-only commands do not require map or image settings.
 	t.Setenv("CLOUDFLARE_IMAGES_DOMAIN", "")
 	t.Setenv("CLOUDFLARE_IMAGES_ACCOUNT_HASH", "")
 	t.Setenv("MAPBOX_ACCESS_TOKEN", "")
@@ -106,25 +108,20 @@ func setPrivateTestCredentials(t *testing.T) map[string]string {
 
 func TestStartupDoesNotLogSecrets(t *testing.T) {
 	privateSettings := setPrivateTestCredentials(t)
-	tests := []struct {
-		name        string
-		databaseURL string
-		wantMessage string
-		dotenv      string
-	}{
-		{name: "missing database URL", wantMessage: "DATABASE_URL is not set"},
-		{name: "invalid database URL",
-			databaseURL: "postgres://example:fake-private-db-password@localhost:invalid/cats",
-			wantMessage: "invalid port"},
-		{name: "invalid dotenv file",
-			dotenv:      "CLOUDFLARE_IMAGES_API_KEY=\"fake-private-cloudflare-key\n",
-			wantMessage: "cannot read .env"},
+	const contentURL = "postgres://reader:fake-private-db-password@content.example/photos"
+	const usersURL = "postgres://writer:fake-private-db-password@users.example/users"
+	tests := []struct{ name, databaseURL, usersURL, wantMessage, dotenv string }{
+		{name: "missing content URL", usersURL: usersURL, wantMessage: "DATABASE_URL is not set"},
+		{name: "missing users URL", databaseURL: contentURL, wantMessage: "USERS_DATABASE_URL is not set"},
+		{name: "invalid content URL", databaseURL: "postgres://reader:fake-private-db-password@localhost:invalid/photos", usersURL: usersURL, wantMessage: "cannot parse DATABASE_URL"},
+		{name: "invalid users URL", databaseURL: contentURL, usersURL: "postgres://writer:fake-private-db-password@localhost:invalid/users", wantMessage: "cannot parse USERS_DATABASE_URL"},
+		{name: "invalid dotenv file", databaseURL: contentURL, usersURL: usersURL, dotenv: "CLOUDFLARE_IMAGES_API_KEY=\"fake-private-cloudflare-key\n", wantMessage: "cannot read .env"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("DATABASE_URL", tt.databaseURL)
+			t.Setenv("USERS_DATABASE_URL", tt.usersURL)
 			t.Setenv("CATS_CONFIG_STARTUP_TEST", "1")
-			// Run main in a child process because log.Fatal exits the process.
 			cmd := exec.Command(os.Args[0], "-test.run=^TestConfigStartupProcess$")
 			cmd.Dir = t.TempDir()
 			if tt.dotenv != "" {
@@ -144,8 +141,10 @@ func TestStartupDoesNotLogSecrets(t *testing.T) {
 					t.Errorf("startup log exposed the value of %s", name)
 				}
 			}
-			if tt.databaseURL != "" && strings.Contains(string(output), tt.databaseURL) {
-				t.Error("startup log exposed the database connection URL")
+			for _, connection := range []string{tt.databaseURL, tt.usersURL} {
+				if connection != "" && strings.Contains(string(output), connection) {
+					t.Error("startup log exposed a database connection URL")
+				}
 			}
 		})
 	}
@@ -155,7 +154,7 @@ func clearConfigEnvironment(t *testing.T) {
 	t.Helper()
 	for _, name := range []string{
 		"DATABASE_URL", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB",
-		"PHOTOS_DATABASE_URL",
+		"USERS_DATABASE_URL",
 		"CLOUDFLARE_IMAGES_DOMAIN", "CLOUDFLARE_IMAGES_ACCOUNT_HASH", "MAPBOX_ACCESS_TOKEN",
 	} {
 		// t.Setenv records the original value so cleanup restores it after Unsetenv.
@@ -172,7 +171,8 @@ func TestLocalDotenvConfiguration(t *testing.T) {
 	content := `POSTGRES_USER=sample
 POSTGRES_PASSWORD='sample:@/?#password'
 POSTGRES_DB=cats_sample
-PHOTOS_DATABASE_URL=' postgres://reader:example@photos.example.com/photos?sslmode=require '
+DATABASE_URL=' postgres://reader:example@photos.example.com/photos?sslmode=require '
+USERS_DATABASE_URL=' postgres://writer:example@users.example.com/users?sslmode=require '
 CLOUDFLARE_IMAGES_DOMAIN=images.example.com
 CLOUDFLARE_IMAGES_ACCOUNT_HASH=sample-hash
 MAPBOX_ACCESS_TOKEN=file-map-token
@@ -184,7 +184,11 @@ MAPBOX_ACCESS_TOKEN=file-map-token
 	if err != nil {
 		t.Fatal(err)
 	}
-	connection, err := url.Parse(cfg.DatabaseURL)
+	localURL, err := cfg.localDatabaseURL("5432")
+	if err != nil {
+		t.Fatal(err)
+	}
+	connection, err := url.Parse(localURL)
 	if err != nil {
 		t.Fatal("could not parse the derived database URL")
 	}
@@ -197,8 +201,8 @@ MAPBOX_ACCESS_TOKEN=file-map-token
 		cfg.MapboxAccessToken != "file-map-token" {
 		t.Fatal("image or map settings were not loaded from .env")
 	}
-	if cfg.PhotosDatabaseURL != "postgres://reader:example@photos.example.com/photos?sslmode=require" {
-		t.Fatal("optional photo database URL was not loaded and trimmed")
+	if cfg.DatabaseURL != "postgres://reader:example@photos.example.com/photos?sslmode=require" || cfg.UsersDatabaseURL != "postgres://writer:example@users.example.com/users?sslmode=require" {
+		t.Fatal("database URLs were not loaded and trimmed")
 	}
 	if _, exists := os.LookupEnv("POSTGRES_PASSWORD"); exists {
 		t.Fatal("loading .env changed the process environment")
@@ -208,7 +212,7 @@ MAPBOX_ACCESS_TOKEN=file-map-token
 	t.Setenv("DATABASE_URL", "postgres://example:example@localhost:5433/cats_test")
 	t.Setenv("MAPBOX_ACCESS_TOKEN", "environment-map-token")
 	t.Setenv("CLOUDFLARE_IMAGES_DOMAIN", "")
-	t.Setenv("PHOTOS_DATABASE_URL", "")
+	t.Setenv("USERS_DATABASE_URL", "postgres://writer:example@override.example/users")
 	cfg, err = loadConfigFile(".env")
 	if err != nil {
 		t.Fatal(err)
@@ -216,18 +220,23 @@ MAPBOX_ACCESS_TOKEN=file-map-token
 	if cfg.DatabaseURL != os.Getenv("DATABASE_URL") || cfg.MapboxAccessToken != "environment-map-token" || cfg.ImageDomain != "" {
 		t.Fatal(".env overwrote explicitly supplied environment values")
 	}
-	if cfg.PhotosDatabaseURL != "" {
-		t.Fatal("an explicit empty environment value did not disable the photo source")
+	if cfg.UsersDatabaseURL != "postgres://writer:example@override.example/users" {
+		t.Fatal(".env overwrote the explicit users URL")
+	}
+	t.Setenv("USERS_DATABASE_URL", "")
+	if _, err := loadConfigFile(".env"); err == nil || err.Error() != "USERS_DATABASE_URL is not set" {
+		t.Fatal("an explicitly empty users URL did not fail validation")
 	}
 }
 
-func TestLegacyDatabaseURL(t *testing.T) {
+func TestDatabaseURLInterpolation(t *testing.T) {
 	clearConfigEnvironment(t)
 	t.Chdir(t.TempDir())
 	content := `POSTGRES_USER=sample
 POSTGRES_PASSWORD=sample-password
 POSTGRES_DB=cats_sample
-DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}?sslmode=disable
+DATABASE_URL=postgres://reader:example@content.example/photos
+USERS_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}?sslmode=disable
 `
 	if err := os.WriteFile(".env", []byte(content), 0o600); err != nil {
 		t.Fatal(err)
@@ -236,8 +245,8 @@ DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${P
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.DatabaseURL != "postgres://sample:sample-password@localhost:5432/cats_sample?sslmode=disable" {
-		t.Fatal("existing .env DATABASE_URL interpolation stopped working")
+	if cfg.UsersDatabaseURL != "postgres://sample:sample-password@localhost:5432/cats_sample?sslmode=disable" {
+		t.Fatal("explicit USERS_DATABASE_URL interpolation stopped working")
 	}
 }
 
@@ -266,18 +275,19 @@ func TestLocalDatabaseRequirements(t *testing.T) {
 	}
 }
 
-func TestMissingLocalConfigSetting(t *testing.T) {
-	for _, missing := range []string{"POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"} {
+func TestDatabaseURLsMustBeExplicit(t *testing.T) {
+	for _, missing := range []string{"DATABASE_URL", "USERS_DATABASE_URL"} {
 		t.Run(missing, func(t *testing.T) {
 			clearConfigEnvironment(t)
-			for _, name := range []string{"POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"} {
-				if name != missing {
-					t.Setenv(name, "sample")
-				}
-			}
+			t.Setenv("POSTGRES_USER", "sample")
+			t.Setenv("POSTGRES_PASSWORD", "sample-password")
+			t.Setenv("POSTGRES_DB", "cats_sample")
+			t.Setenv("DATABASE_URL", "postgres://reader:example@content.example/photos")
+			t.Setenv("USERS_DATABASE_URL", "postgres://writer:example@localhost/users")
+			t.Setenv(missing, " \t\n")
 			_, err := loadConfigFile(filepath.Join(t.TempDir(), ".env"))
 			if err == nil || err.Error() != missing+" is not set" {
-				t.Fatal("incomplete local settings did not produce the missing setting's name")
+				t.Fatal("database URL was not required explicitly")
 			}
 		})
 	}

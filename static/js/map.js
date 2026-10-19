@@ -67,6 +67,9 @@
   const photoStatus = document.getElementById("photo-status");
   const markers = L.featureGroup().addTo(map);
   const photosByPlace = new Map();
+  for (const option of document.querySelectorAll(".place-option")) {
+    photosByPlace.set(option.dataset.placeId, []);
+  }
   let photosLoaded = false;
   let totalPhotos = 0;
 
@@ -124,16 +127,14 @@
       const photos = await response.json();
       if (!Array.isArray(photos)) throw new Error("Invalid photo response");
 
-      const photosByLocation = new Map();
       for (const photo of photos) {
         if (!photo ||
             !Number.isFinite(photo.latitude) || Math.abs(photo.latitude) > 90 ||
             !Number.isFinite(photo.longitude) || Math.abs(photo.longitude) > 180) {
           continue;
         }
-        const locationKey = JSON.stringify([photo.city ?? "", photo.country ?? ""]);
-        if (!photosByLocation.has(locationKey)) photosByLocation.set(locationKey, []);
-        photosByLocation.get(locationKey).push(photo);
+        // Places and photos use IDs from the same content database.
+        photosByPlace.get(String(photo.location_id))?.push(photo);
 
         L.circleMarker([photo.latitude, photo.longitude], {
           radius: 6,
@@ -142,13 +143,6 @@
           fillColor: "red",
           fillOpacity: 0.2,
         }).addTo(markers);
-      }
-
-      // Local place IDs need not match IDs in the separate photo database.
-      for (const option of document.querySelectorAll(".place-option")) {
-        const { placeId, placeCity, placeCountry } = option.dataset;
-        const locationKey = JSON.stringify([placeCity, placeCountry]);
-        photosByPlace.set(placeId, photosByLocation.get(locationKey) ?? []);
       }
 
       totalPhotos = photos.length;
