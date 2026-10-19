@@ -49,8 +49,8 @@ Open [http://localhost:3000/](http://localhost:3000/) in a browser.
 
 The header shows **Cats of Asia** and a **Places** menu populated from
 `photos_location`. Click **Places** to open the list and select a place without
-reloading the homepage. The menu closes after selection and its label remains
-**Places**. The selected-place heading is retained for assistive technology,
+reloading the homepage. The menu closes after selection and its label shows
+the selected city and country. The selected-place heading is retained for assistive technology,
 but is not visually displayed above the map. If there are no places, the
 menu contains an empty list. The three example places are available automatically
 after startup; additional database entries also appear in the menu.
@@ -58,7 +58,15 @@ after startup; additional database entries also appear in the menu.
 Selecting a place stores its database ID in the URL, for example `/?place=1`.
 Reloading the page or opening that link restores the selection, provided the
 place exists in that database. The browser's Back and Forward buttons restore
-earlier selections. Missing or unknown IDs leave no place selected.
+earlier selections and move the map accordingly. Missing or unknown IDs leave
+no place selected, reset the menu label to **Places**, and show the map overview.
+
+Selecting a place centres the map on its first photo with valid coordinates,
+in photo API order, at zoom level 14. Selection waits for the photo request to
+finish, including when following a link or changing places while data loads.
+If the place has no matching geolocated photos, a visible notice appears and
+the map does not jump to an unrelated location. Places and photos are matched
+by the exact city-and-country pair, not by IDs from different databases.
 
 The homepage and login page share `template/base.tmpl` and the header. The
 Places menu is also available on the login page; selecting a place there opens
@@ -83,7 +91,8 @@ Set `MAPBOX_ACCESS_TOKEN` in your ignored `.env` to a working **public** Mapbox
 browser token starting with `pk.`, then start or restart `./scripts/run.sh`.
 Open [http://localhost:3000](http://localhost:3000) to see the map. The browser
 loads `/api/photos` and places a red circle for each photo with valid latitude and
-longitude. The initial view fits all markers, with a maximum initial zoom of 14
+longitude. Without a valid place selection, the initial view fits all markers,
+with a maximum initial zoom of 14
 so a single photo does not zoom in too far. If there are no photos with valid
 coordinates, the map stays centered on Southeast Asia and displays a message.
 Photos without valid coordinates are skipped. The normal view shows only the
@@ -106,7 +115,7 @@ the official Mapbox logo. Keep these visible when changing the layout.
 
 Markers currently show photo locations, not image previews. Photos at the same
 coordinates overlap; grouping and previews will be added separately. Selecting
-a place still updates its screen-reader heading and URL, not the map view. Opening the map
+a place updates the menu, URL, screen-reader heading, and map view. Opening the map
 reads the configured photo source through the existing read-only API; it does
 not import or modify photo records. It does not fetch the photo images.
 
