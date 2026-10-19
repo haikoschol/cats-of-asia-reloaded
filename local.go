@@ -43,20 +43,22 @@ password = %s
 }
 
 func runTests(cfg config, port string) error {
-	// Always target the local test container, even if DATABASE_URL points elsewhere.
+	// Override both roles: tests must never connect to configured real databases.
 	databaseURL, err := cfg.localDatabaseURL(port)
 	if err != nil {
 		return err
 	}
 	command := exec.Command("go", "test", "-count=1", "./...")
 	for _, assignment := range os.Environ() {
-		if !strings.HasPrefix(assignment, "DATABASE_URL=") && !strings.HasPrefix(assignment, "PHOTOS_DATABASE_URL=") {
+		if !strings.HasPrefix(assignment, "DATABASE_URL=") &&
+			!strings.HasPrefix(assignment, "USERS_DATABASE_URL=") &&
+			!strings.HasPrefix(assignment, "CATS_TEST_DATABASE_URL=") {
 			command.Env = append(command.Env, assignment)
 		}
 	}
 	command.Env = append(command.Env, "DATABASE_URL="+databaseURL)
-	// An explicit empty value also overrides a remote URL in the local .env.
-	command.Env = append(command.Env, "PHOTOS_DATABASE_URL=")
+	command.Env = append(command.Env, "USERS_DATABASE_URL="+databaseURL)
+	command.Env = append(command.Env, "CATS_TEST_DATABASE_URL="+databaseURL)
 	command.Stdin = os.Stdin
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"time"
 )
 
 type location struct {
@@ -11,7 +12,9 @@ type location struct {
 }
 
 func (app *application) locations(ctx context.Context) ([]location, error) {
-	rows, err := app.db.QueryContext(ctx,
+	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	defer cancel()
+	rows, err := app.contentDB.QueryContext(ctx,
 		"SELECT id, city, country FROM photos_location ORDER BY country, city, id",
 	)
 	if err != nil {

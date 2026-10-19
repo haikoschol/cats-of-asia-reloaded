@@ -12,7 +12,7 @@ import (
 func TestPrepareLocalUsesDotenv(t *testing.T) {
 	clearConfigEnvironment(t)
 	dir := t.TempDir()
-	content := "POSTGRES_USER=sample\nPOSTGRES_PASSWORD='fake-private-password'\nPOSTGRES_DB=cats_sample\n"
+	content := "POSTGRES_USER=sample\nPOSTGRES_PASSWORD='fake-private-password'\nPOSTGRES_DB=cats_sample\nDATABASE_URL=postgres://reader:example@content.example/photos\nUSERS_DATABASE_URL=postgres://sample:example@localhost/cats_sample\n"
 	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,8 @@ func TestRunTestsUsesIsolatedConnection(t *testing.T) {
 	// to any database or recursively starting the real test suite.
 	program := `#!/bin/sh
 [ "$DATABASE_URL" = "$EXPECTED_TEST_DATABASE_URL" ] || exit 1
-[ "${PHOTOS_DATABASE_URL-unset}" = "" ] || exit 1
+[ "$USERS_DATABASE_URL" = "$EXPECTED_TEST_DATABASE_URL" ] || exit 1
+[ "$CATS_TEST_DATABASE_URL" = "$EXPECTED_TEST_DATABASE_URL" ] || exit 1
 [ "$1" = test ] && [ "$2" = -count=1 ] && [ "$3" = ./... ]
 `
 	if err := os.WriteFile(filepath.Join(dir, "go"), []byte(program), 0o700); err != nil {
@@ -90,7 +91,7 @@ func TestRunTestsUsesIsolatedConnection(t *testing.T) {
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("DATABASE_URL", "postgres://example:fake-private-password@remote.example/cats")
-	t.Setenv("PHOTOS_DATABASE_URL", "postgres://reader:fake-private-password@remote.example/photos")
+	t.Setenv("USERS_DATABASE_URL", "postgres://reader:fake-private-password@remote.example/photos")
 	t.Setenv("EXPECTED_TEST_DATABASE_URL", "postgres://sample:sample-password@localhost:5433/cats_sample?sslmode=disable")
 	cfg := config{PostgresUser: "sample", PostgresPassword: "sample-password", PostgresDB: "cats_sample"}
 	if err := runTests(cfg, "5433"); err != nil {
@@ -99,7 +100,7 @@ func TestRunTestsUsesIsolatedConnection(t *testing.T) {
 	if os.Getenv("DATABASE_URL") != "postgres://example:fake-private-password@remote.example/cats" {
 		t.Fatal("test runner overwrote its parent's database connection")
 	}
-	if os.Getenv("PHOTOS_DATABASE_URL") != "postgres://reader:fake-private-password@remote.example/photos" {
-		t.Fatal("test runner overwrote its parent's photo connection")
+	if os.Getenv("USERS_DATABASE_URL") != "postgres://reader:fake-private-password@remote.example/photos" {
+		t.Fatal("test runner overwrote its parent's users connection")
 	}
 }

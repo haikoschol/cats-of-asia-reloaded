@@ -1,7 +1,7 @@
 # Cats of Asia Reloaded
 
 A small Go web application backed by PostgreSQL with PostGIS. The homepage lets
-you select a place and displays its name in the center of the page.
+you select a place and displays geolocated photos as red circles on a map.
 
 ## Prerequisites
 
@@ -27,10 +27,19 @@ Create the local database configuration:
 cp .env.example .env
 ```
 
-Set the PostgreSQL values in `.env`. Go builds a local `DATABASE_URL` from
-`POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` unless you provide an
-explicit URL. The development database includes PostGIS, which is activated
-automatically when the schema is created.
+Set the PostgreSQL values in `.env` for the local users/session container.
+Both `DATABASE_URL` and `USERS_DATABASE_URL` must be set explicitly:
+
+- `DATABASE_URL` points to an existing database with the Django photo schema.
+  Ask the database owner for access; the placeholder in `.env.example` does not
+  connect to a real server. Photos **and the Places menu** use this connection,
+  which the Go app opens read-only.
+- `USERS_DATABASE_URL` points to the local Docker database, normally on port
+  `5432`, and must match `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`.
+  Only users and sessions use this connection.
+
+The development container includes PostGIS; the startup schema is applied only
+inside that local container, never to the external content database.
 
 Start the database and the web application:
 
@@ -52,8 +61,9 @@ The header shows **Cats of Asia** and a **Places** menu populated from
 reloading the homepage. The menu closes after selection and its label shows
 the selected city and country. The selected-place heading is retained for assistive technology,
 but is not visually displayed above the map. If there are no places, the
-menu contains an empty list. The three example places are available automatically
-after startup; additional database entries also appear in the menu.
+menu contains an empty list. The list comes from `DATABASE_URL`, just like the
+photos; local photo tables do not feed the menu. Normal startup does not create
+example places.
 
 Selecting a place stores its database ID in the URL, for example `/?place=1`.
 Reloading the page or opening that link restores the selection, provided the
@@ -66,7 +76,9 @@ in photo API order, at zoom level 14. Selection waits for the photo request to
 finish, including when following a link or changing places while data loads.
 If the place has no matching geolocated photos, a visible notice appears and
 the map does not jump to an unrelated location. Places and photos are matched
-by the exact city-and-country pair, not by IDs from different databases.
+directly by the shared place ID (`location_id` in the photo API), not by city
+or country names. The frontend keeps one map from place IDs to photo metadata;
+both datasets come from the same content database.
 
 The homepage and login page share `template/base.tmpl` and the header. The
 Places menu is also available on the login page; selecting a place there opens
@@ -206,7 +218,7 @@ environment. An unreadable or malformed file stops startup with a generic error
 that does not include its contents.
 
 For direct execution, build the app and run it from the repository root while
-the local database is already running:
+the users database is already running:
 
 ```bash
 go build .
@@ -224,9 +236,9 @@ environment, not in `.env.example`.
 
 | Setting | Purpose | Requirement |
 | --- | --- | --- |
-| `DATABASE_URL` | PostgreSQL connection, including credentials; server-only | Supply explicitly or derive from the local PostgreSQL settings |
-| `PHOTOS_DATABASE_URL` | Optional separate, read-only photo database; server-only | Leave unset to read photos from `DATABASE_URL`; use TLS for a remote source |
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Local database and pgconsole credentials; server-only | Required by the development and test scripts; optional for direct execution with an explicit `DATABASE_URL` |
+| `DATABASE_URL` | Read-only content connection for photos, coordinates, and locations; server-only | Required explicitly; use TLS for a remote source |
+| `USERS_DATABASE_URL` | Read/write connection for users and sessions; server-only | Required explicitly; normally the local Docker database |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Local Docker database and pgconsole credentials; server-only | Required by the development and test scripts |
 | `CLOUDFLARE_IMAGES_DOMAIN` | Public image-delivery hostname, without a scheme or path | Required when the photo API returns photos |
 | `CLOUDFLARE_IMAGES_ACCOUNT_HASH` | Public account identifier used in image URLs | Required when the photo API returns photos |
 | `MAPBOX_ACCESS_TOKEN` | Public browser token for fetching map tiles | Required when displaying a map |
@@ -235,15 +247,31 @@ The homepage displays a map with photo markers when a public Mapbox token is
 configured; it does not display photo images yet. The photo API checks the
 image domain and account hash
 when photos exist; an empty result needs neither. Creating user
-accounts only needs the database connection. Missing required settings produce
+accounts uses only the users connection, although both URLs must be configured. Missing required settings produce
 a message naming the variable, such as `DATABASE_URL is not set`, without
 including its value.
 
-An explicit `DATABASE_URL` is used as supplied and is not replaced by a derived
-URL. Existing `.env` files with `${POSTGRES_USER}`, `${POSTGRES_PASSWORD}`, and
-`${POSTGRES_DB}` references in that URL remain supported. With the new example
-file, Go constructs the URL itself and correctly encodes special characters in
-credentials. Your existing `.env` does not need to be overwritten.
+Neither URL is derived automatically from the Docker settings. Explicit URLs
+can use `${POSTGRES_USER}`, `${POSTGRES_PASSWORD}`, and `${POSTGRES_DB}`
+references in `.env`; URL-encode special characters in URI credentials.
+
+### Migrating an existing local configuration
+
+The meaning of `DATABASE_URL` has changed. Stop the old app before editing
+`.env`, then make these changes together with the updated code:
+
+1. Rename the old local `DATABASE_URL` setting to `USERS_DATABASE_URL`.
+2. Rename the old external `PHOTOS_DATABASE_URL` setting to `DATABASE_URL`.
+3. Remove `PHOTOS_DATABASE_URL`; it is no longer read and there is no fallback.
+
+Keep the connection values and Docker credentials unchanged so existing local
+accounts and sessions remain available. Update any exported environment values
+as well: they still override `.env`. If you previously used one local database
+for everything, both required URLs may point to that database. No tables or
+records are copied or deleted by this configuration change.
+
+Place IDs in links now refer to the content database. Old local `?place=...`
+links may identify a different place or no place; select it again from the menu.
 
 The image domain and account hash identify public image URLs; neither grants
 upload access. The map setting must be a token intended for use in a browser.
@@ -271,8 +299,7 @@ curl http://localhost:3000/api/photos
 ```
 
 `GET /api/photos` returns a public JSON array of photos from the configured
-`PHOTOS_DATABASE_URL`, falling back to `DATABASE_URL` when no separate photo
-source is set. Results are ordered by capture timestamp and then UUID. An empty
+`DATABASE_URL`, the same database used by the Places menu. Results are ordered by capture timestamp and then UUID. An empty
 photo database returns `[]`, not `null`. Each entry contains only the fields shown in this
 example (the image settings and photo identifiers below are example values):
 
@@ -282,6 +309,7 @@ example (the image settings and photo identifiers below are example values):
     "id": "21000000-0000-4000-8000-000000000001",
     "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "timestamp": "2026-01-02T03:30:00Z",
+    "location_id": 1,
     "latitude": 13.75,
     "longitude": 100.5,
     "city": "Bangkok",
@@ -296,8 +324,10 @@ example (the image settings and photo identifiers below are example values):
 ```
 
 Timestamps use ISO 8601/RFC 3339 in UTC (`Z`). PostGIS X is longitude and Y is
-latitude. A photo without coordinates remains in the result, with `latitude`,
-`longitude`, `city`, and `country` explicitly set to `null`. Known empty city or
+latitude. `location_id` is the numeric ID of the associated place in the same
+content database used by the Places menu; it does not replace the photo UUID in
+`id`. A photo without coordinates remains in the result, with `location_id`,
+`latitude`, `longitude`, `city`, and `country` explicitly set to `null`. Known empty city or
 country strings remain empty strings. All three image URLs use the same
 centrally constructed Cloudflare base URL and the photo UUID.
 
@@ -307,39 +337,30 @@ Other HTTP methods receive `405 Method Not Allowed`. Database, configuration,
 or JSON errors return a generic `500`; missing image-setting names are recorded
 only in the server log. Mapbox settings are not needed for this endpoint.
 
-To read existing photos without moving local accounts or sessions, add
-`PHOTOS_DATABASE_URL` to your ignored `.env`, using the connection details
-provided by the database owner. An example (not a working connection) is:
+Set `DATABASE_URL` in your ignored `.env` using the content database details
+provided by the owner. Keep `USERS_DATABASE_URL` pointing to the separate users
+database; the content connection is never used for account creation or sessions.
 
-```dotenv
-PHOTOS_DATABASE_URL=postgres://reader:example-password@db.example.com/photos?sslmode=require
-```
+Every content connection starts with `default_transaction_read_only=on`,
+queries have a ten-second statement timeout, and photo queries additionally
+use a read-only transaction. Photo and location reads have twelve-second context
+deadlines, including pool waits. Photo transactions end before image URLs are
+constructed. A dedicated read-only database role is preferable; these application
+settings do not replace database access permissions.
 
-The app opens that separate connection only for photo reads. Every connection
-starts with `default_transaction_read_only=on`, queries have a ten-second
-statement timeout, and the photo query additionally uses a read-only transaction.
-Photo database operations also have a twelve-second context deadline, including
-waiting for a free connection and reads through the primary database fallback.
-An earlier request cancellation or deadline is respected. The transaction ends
-before image URLs are constructed, releasing the connection promptly.
-The connection is established lazily when the API is requested. A missing or
-unavailable photo source therefore does not prevent local accounts or the
-homepage from working; an API request returns a generic `500` on connection
-failure. If the setting is empty, photo reads use the primary database as before.
+The content connection is established lazily on the first location/photo read.
+An unavailable source now also affects homepage/login rendering because both
+pages load its Places menu. Creating a user account only connects to
+`USERS_DATABASE_URL`, so it does not need the content server to be reachable.
 
 Use the source deployment's public `CLOUDFLARE_IMAGES_DOMAIN` and
-`CLOUDFLARE_IMAGES_ACCOUNT_HASH` for working image URLs. No private Cloudflare
-upload key or Mapbox token is needed. No production data is copied into the
-local database, so pgconsole continues to show only local records. Accounts,
-sessions, and the homepage's Places menu continue to use the local database;
-map markers use the photo source returned by `/api/photos`.
-
-Keep `DATABASE_URL` pointed at the local app database: user creation, sessions,
-and the development schema setup must never target the original database.
-Do not commit either real connection URL. A dedicated read-only database role
-is preferable; application-enforced read-only mode does not replace database
-access permissions. The existing source database is never migrated or seeded
-by this feature.
+`CLOUDFLARE_IMAGES_ACCOUNT_HASH` for image URLs. No private Cloudflare upload
+key or Mapbox token is needed for the API. No production data is copied locally;
+pgconsole still shows the local Docker database. Existing local photo/place
+tables may remain, but the app does not use them when content is external.
+The startup scripts apply schema only inside the local Docker container, not
+through `DATABASE_URL`. Never run migrations or seeds against the original
+database, and do not commit either real connection URL.
 
 ## User accounts
 
@@ -350,7 +371,7 @@ Create a user account with a username as the only argument:
 ```
 
 The command prompts twice for a password without displaying the characters you
-type. It creates the account in the local PostgreSQL database and then exits.
+type. It creates the account in `USERS_DATABASE_URL` and then exits.
 
 Start the web application with `./scripts/run.sh`, then open
 [http://localhost:3000/login](http://localhost:3000/login) to sign in. A
@@ -366,26 +387,30 @@ Run the automated homepage test with:
 ```
 
 The script starts a separate PostgreSQL test database on port `5433`, applies
-the shared schema with its example places, and uses the Go application's
+the shared schema and then the fixtures from `scripts/test-data.sql`, and uses the Go application's
 `run-tests` command to run `go test -count=1 ./...`
 without reusing cached test results. It checks that the homepage returns HTTP
 status `200` and displays `No place selected`. The test database, its Docker
 volume, and its network are removed automatically when the command finishes.
 The Go command reads the same configuration as the app and supplies a connection
 to `localhost:5433` to the test process using the local PostgreSQL credentials.
-The development or deployment `DATABASE_URL` is deliberately not used for tests.
-The test runner also forces `PHOTOS_DATABASE_URL` to an explicit empty value,
-overriding both the parent environment and `.env`, so tests cannot use the
-configured external photo source.
+The test runner overrides **both** `DATABASE_URL` and `USERS_DATABASE_URL`
+with the isolated connection, regardless of the parent environment or `.env`.
+It also supplies a test-only connection marker; database tests refuse to run
+without the matching isolated configuration. Do not export production URLs
+and run database tests directly.
 Schema tests also check inserting related photo data in dependency order,
 geographic coordinates, cascading deletions, retaining photos without
 coordinates, and reapplying the schema without losing data.
 Photo API integration tests cover a normal record, an empty result, and a photo
 without coordinates, including UTC timestamps, longitude/latitude ordering,
-image URLs, public JSON fields, and selection of the separate photo connection.
-A targeted connection check also verifies its enforced read-only default.
+image URLs, place IDs (including `null` without coordinates), public JSON fields, and selection of the content connection for
+both photos and locations. A login regression check uses different connection-
+local tables to verify that authentication reads usersDB while the header
+reads contentDB. A connection check verifies the enforced read-only default
+and rejection of content writes.
 A pool-wait check verifies that a caller deadline also cancels photo reads while
-the primary database's only connection is occupied.
+the content database's only connection is occupied.
 Temporary tables exist only on their test connection and are removed when it
 closes; production is not used.
 
@@ -442,11 +467,12 @@ UUIDs, points, and timestamps) must be provided by the caller when inserting row
 
 The existing Go `users` and `sessions` tables remain in use.
 Django-specific authentication, admin, session, and migration bookkeeping tables
-are not copied. The schema also seeds three example places read from production:
-Bali (Indonesia), Vientiane (Laos), and Kuala Lumpur (Malaysia), with their
-original `tzoffset` values unchanged. Existing city/country pairs are skipped,
-so repeated starts create no duplicates and do not overwrite edited places.
-Photos and platforms are not seeded; this is not a full production-data import.
+are not copied. The shared schema creates no example places, photos, or
+platforms. Only `scripts/run-tests.sh` loads the three example places from
+`scripts/test-data.sql` into its isolated, disposable test database. Normal
+startup does not run that file. Existing local rows are not automatically
+deleted by the schema; old unused example places can be removed explicitly
+after checking that no coordinates refer to them.
 
 The schema removes the obsolete `greetings` demo table, including its example
 rows, on the next start. Users, sessions, and photo data are preserved; no
@@ -469,7 +495,7 @@ docker compose down --volumes
 ./scripts/run.sh
 ```
 
-The next start creates a fresh database with the current schema and example
+The next start creates a fresh database with the current schema but no example
 places. Recreate local accounts using the user creation command above. The
 test script already creates and removes its own database on every run.
 
@@ -491,15 +517,18 @@ docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "\d 
 Open [http://localhost:3001/](http://localhost:3001/) in a browser. No separate
 login is required; pgconsole is only available on your local computer.
 
-The `photos_location` table is listed in the sidebar. Selecting it shows its schema.
-To view the rows, click **New Query** and run:
+pgconsole connects to the local Docker database, not the external content
+database used by the homepage. The local photo tables may therefore be empty.
+Selecting a table in the sidebar shows its schema. To view local accounts,
+click **New Query** and run:
 
 ```sql
-SELECT * FROM photos_location;
+SELECT id, username, created_at FROM users;
 ```
 
-The query result displays the example places. Values can be edited directly
-in the result grid and pgconsole will prepare the corresponding SQL update.
+The result displays any accounts created locally. To inspect the actual places
+and photos used by the homepage, connect a PostgreSQL client to `DATABASE_URL`
+with read-only access instead.
 
 ## Stop the database
 

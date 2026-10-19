@@ -4,45 +4,28 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"time"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
 )
 
 type photo struct {
-	ID        string    `json:"id"`
-	SHA256    string    `json:"sha256"`
-	Timestamp time.Time `json:"timestamp"`
-	Latitude  *float64  `json:"latitude"`
-	Longitude *float64  `json:"longitude"`
-	City      *string   `json:"city"`
-	Country   *string   `json:"country"`
-	URLs      imageURLs `json:"urls"`
+	ID         string    `json:"id"`
+	SHA256     string    `json:"sha256"`
+	Timestamp  time.Time `json:"timestamp"`
+	LocationID *int64    `json:"location_id"`
+	Latitude   *float64  `json:"latitude"`
+	Longitude  *float64  `json:"longitude"`
+	City       *string   `json:"city"`
+	Country    *string   `json:"country"`
+	URLs       imageURLs `json:"urls"`
 }
 
 type imageURLs struct {
 	Desktop string `json:"desktop"`
 	Mobile  string `json:"mobile"`
 	Smol    string `json:"smol"`
-}
-
-func openPhotosDatabase(databaseURL string) (*sql.DB, error) {
-	cfg, err := pgx.ParseConfig(databaseURL)
-	if err != nil {
-		// Driver parse errors may include the original credential-bearing URL.
-		return nil, errors.New("cannot parse PHOTOS_DATABASE_URL")
-	}
-	cfg.RuntimeParams["default_transaction_read_only"] = "on"
-	cfg.RuntimeParams["statement_timeout"] = "10000"
-	cfg.ConnectTimeout = 5 * time.Second
-	db := stdlib.OpenDB(*cfg)
-	db.SetMaxOpenConns(3)
-	return db, nil
 }
 
 func (cfg config) photoURLs(id string) imageURLs {
@@ -55,15 +38,11 @@ func (cfg config) photoURLs(id string) imageURLs {
 }
 
 func (app *application) photos(ctx context.Context) ([]photo, error) {
-	// Also bound pool waits and reads through the primary database fallback.
+	// Bound both query time and waits for a shared content connection.
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
 
-	db := app.photosDB
-	if db == nil {
-		db = app.db
-	}
-	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := app.contentDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +50,7 @@ func (app *application) photos(ctx context.Context) ([]photo, error) {
 
 	rows, err := tx.QueryContext(ctx, `
 		SELECT p.id, p.sha256, p.timestamp,
-		       ST_Y(c.point::geometry), ST_X(c.point::geometry), l.city, l.country
+		       l.id, ST_Y(c.point::geometry), ST_X(c.point::geometry), l.city, l.country
 		FROM photos_photo p
 		LEFT JOIN photos_coordinates c ON c.id = p.coordinates_id
 		LEFT JOIN photos_location l ON l.id = c.location_id
@@ -84,7 +63,7 @@ func (app *application) photos(ctx context.Context) ([]photo, error) {
 	photos := []photo{}
 	for rows.Next() {
 		var p photo
-		if err := rows.Scan(&p.ID, &p.SHA256, &p.Timestamp, &p.Latitude, &p.Longitude, &p.City, &p.Country); err != nil {
+		if err := rows.Scan(&p.ID, &p.SHA256, &p.Timestamp, &p.LocationID, &p.Latitude, &p.Longitude, &p.City, &p.Country); err != nil {
 			return nil, err
 		}
 		p.Timestamp = p.Timestamp.UTC()

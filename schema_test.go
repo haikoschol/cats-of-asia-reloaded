@@ -7,7 +7,7 @@ import (
 )
 
 func TestPhotoSchema(t *testing.T) {
-	db, err := sql.Open("pgx", os.Getenv("DATABASE_URL"))
+	db, err := sql.Open("pgx", testDatabaseURL(t))
 	if err != nil {
 		t.Fatal(err)
 	}
