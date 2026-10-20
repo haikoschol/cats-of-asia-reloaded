@@ -67,6 +67,7 @@
   const photoStatus = document.getElementById("photo-status");
   const markers = L.featureGroup().addTo(map);
   const expandedMarkers = L.featureGroup().addTo(map);
+  const photosByID = new Map();
   const photoGroups = new Map();
   const photosByPlace = new Map();
   for (const option of document.querySelectorAll(".place-option")) {
@@ -77,6 +78,12 @@
   let expandedGroup = null;
   let selectedMarker = null;
   let popupAutoPan = false;
+
+  function hasValidCoordinates(photo) {
+    return photo &&
+      Number.isFinite(photo.latitude) && Math.abs(photo.latitude) <= 90 &&
+      Number.isFinite(photo.longitude) && Math.abs(photo.longitude) <= 180;
+  }
 
   function createMarker(point, radius = 6) {
     return L.circleMarker(point, {
@@ -112,7 +119,7 @@
     marker.setStyle({ fillOpacity: 0.7 });
     marker.closeTooltip();
     const size = map.getSize();
-    L.popup({
+    const popup = L.popup({
       className: "photo-popup",
       minWidth: 0,
       maxWidth: Math.max(120, Math.min(280, size.x - 64)),
@@ -120,10 +127,15 @@
       autoPanPaddingTopLeft: [16, 80],
       autoPanPaddingBottomRight: [16, 16],
       offset: [0, -8],
-    }).setLatLng(marker.getLatLng()).setContent(createPhotoPopup(photo)).openOn(map);
+    });
+    popup.setLatLng(marker.getLatLng()).setContent(createPhotoPopup(
+      photo,
+      () => map.getZoom(),
+      () => popup.update()
+    )).openOn(map);
   }
 
-  function expandGroup(group) {
+  function expandGroup(group, selectedPhoto = null) {
     const wasExpanded = expandedGroup === group;
     collapseGroup();
     if (wasExpanded) return;
@@ -141,6 +153,7 @@
       Math.max(radius + 12, Math.min(size.y - radius - 12, point.y))
     );
 
+    let linkedMarker = null;
     for (let i = 0; i < count; i++) {
       const angle = i * 2 * Math.PI / count - Math.PI / 2;
       // Pixel offsets affect only temporary markers, never photo coordinates.
@@ -154,7 +167,9 @@
         .bindTooltip(`Photo ${i + 1} of ${count}`)
         .addTo(expandedMarkers);
       marker.on("click", () => selectMarker(marker, group.photos[i]));
+      if (group.photos[i] === selectedPhoto) linkedMarker = marker;
     }
+    if (linkedMarker) selectMarker(linkedMarker, selectedPhoto);
   }
 
   map.on("click dragstart zoomstart resize", collapseGroup);
@@ -205,7 +220,41 @@
     map.setView([photo.latitude, photo.longitude], 14);
   }
 
-  window.addEventListener("placechange", showSelectedPlace);
+  function showURLSelection() {
+    if (!photosLoaded) return;
+    const photoLink = readPhotoLink(new URL(window.location.href));
+    const photo = photoLink?.photoID ? photosByID.get(photoLink.photoID) : null;
+
+    if (photo && hasValidCoordinates(photo)) {
+      collapseGroup();
+      photoStatus.textContent = photoLink.warning;
+      photoStatus.hidden = !photoLink.warning;
+      map.invalidateSize({ pan: false });
+      // Finish moving before opening a popup or expanding overlapping photos.
+      map.setView([photo.latitude, photo.longitude], photoLink.zoomLevel, { animate: false });
+      const group = photoGroups.get(JSON.stringify([photo.latitude, photo.longitude]));
+      if (group.photos.length > 1) {
+        expandGroup(group, photo);
+      } else {
+        selectMarker(group.marker, photo);
+      }
+      return;
+    }
+
+    showSelectedPlace();
+    let warning = photoLink?.warning;
+    if (photoLink?.photoID) {
+      warning = photo
+        ? "This photo has no valid coordinates and cannot be shown on the map."
+        : "Photo not found. The link may be outdated.";
+    }
+    if (warning) {
+      photoStatus.textContent = warning;
+      photoStatus.hidden = false;
+    }
+  }
+
+  window.addEventListener("placechange", showURLSelection);
 
   async function loadPhotos() {
     photoStatus.textContent = "Loading photos…";
@@ -220,11 +269,10 @@
       if (!Array.isArray(photos)) throw new Error("Invalid photo response");
 
       for (const photo of photos) {
-        if (!photo ||
-            !Number.isFinite(photo.latitude) || Math.abs(photo.latitude) > 90 ||
-            !Number.isFinite(photo.longitude) || Math.abs(photo.longitude) > 180) {
-          continue;
+        if (photo && typeof photo.id === "string") {
+          photosByID.set(photo.id.toLowerCase(), photo);
         }
+        if (!hasValidCoordinates(photo)) continue;
         photosByPlace.get(String(photo.location_id))?.push(photo);
 
         const pointKey = JSON.stringify([photo.latitude, photo.longitude]);
@@ -255,10 +303,11 @@
       totalPhotos = photos.length;
       photosLoaded = true;
       // Read the current URL, including selections made while photos loaded.
-      showSelectedPlace();
+      showURLSelection();
     } catch {
       collapseGroup();
       photosLoaded = false;
+      photosByID.clear();
       photosByPlace.clear();
       photoGroups.clear();
       markers.clearLayers();

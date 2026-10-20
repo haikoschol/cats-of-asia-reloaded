@@ -24,6 +24,9 @@ if (selectedPlace) {
       event.preventDefault();
       const url = new URL(window.location.href);
       url.searchParams.set("place", option.dataset.placeId);
+      // An explicit place selection replaces the photo selected by a direct link.
+      url.searchParams.delete("id");
+      url.searchParams.delete("zoomLevel");
       if (url.href !== window.location.href) {
         window.history.pushState(null, "", url);
       }
