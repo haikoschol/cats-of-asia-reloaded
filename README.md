@@ -76,9 +76,7 @@ in photo API order, at zoom level 14. Selection waits for the photo request to
 finish, including when following a link or changing places while data loads.
 If the place has no matching geolocated photos, a visible notice appears and
 the map does not jump to an unrelated location. Places and photos are matched
-directly by the shared place ID (`location_id` in the photo API), not by city
-or country names. The frontend keeps one map from place IDs to photo metadata;
-both datasets come from the same content database.
+directly by the shared place ID (`location_id` in the photo API).
 
 The homepage and login page share `template/base.tmpl` and the header. The
 Places menu is also available on the login page; selecting a place there opens
@@ -102,8 +100,8 @@ BSD-2-Clause license, asset provenance, and integrity values are retained in
 Set `MAPBOX_ACCESS_TOKEN` in your ignored `.env` to a working **public** Mapbox
 browser token starting with `pk.`, then start or restart `./scripts/run.sh`.
 Open [http://localhost:3000](http://localhost:3000) to see the map. The browser
-loads `/api/photos` and places a red circle for each photo with valid latitude and
-longitude. Without a valid place selection, the initial view fits all markers,
+loads `/api/photos` and places a red circle at each distinct point with valid
+latitude and longitude. Without a valid place selection, the initial view fits all markers,
 with a maximum initial zoom of 14
 so a single photo does not zoom in too far. If there are no photos with valid
 coordinates, the map stays centered on Southeast Asia and displays a message.
@@ -111,7 +109,10 @@ Photos without valid coordinates are skipped. The normal view shows only the
 header and the map, without a selected-place heading, instructions, or photo
 count above it. There is no divider line below the header, and the map fills
 the remaining window height. Drag to pan and use the +/− buttons or mouse wheel
-to zoom. The browser fetches Mapbox Streets v12 raster tiles directly; internet
+to zoom. Horizontal panning uses Leaflet's `worldCopyJump`: when the map repeats
+around the world, the view returns seamlessly to the world copy containing the
+photo markers. This does not duplicate photos or alter their coordinates.
+The browser fetches Mapbox Streets v12 raster tiles directly; internet
 access is needed. Tile requests count towards the Mapbox account's usage.
 If the token has URL restrictions, allow `http://localhost:3000` for local work
 and the actual site URL for deployment. Never use a secret `sk.` token here.
@@ -125,11 +126,29 @@ remain available. The map includes
 Leaflet, Mapbox, and OpenStreetMap attribution, an Improve this map link, and
 the official Mapbox logo. Keep these visible when changing the layout.
 
-Markers currently show photo locations, not image previews. Photos at the same
-coordinates overlap; grouping and previews will be added separately. Selecting
-a place updates the menu, URL, screen-reader heading, and map view. Opening the map
-reads the configured photo source through the existing read-only API; it does
-not import or modify photo records. It does not fetch the photo images.
+Click a photo marker to open a preview with its place and capture time (shown
+explicitly in UTC). Click the preview to open the larger `desktop` image in a
+full-window overlay in the same tab. Close it using the **×** button at the
+top right or **Escape** to return to the unchanged map and popup. The larger
+image is also the preview's link target: use the browser's right-click menu or
+Ctrl/Cmd-click to open it in a separate tab. An unmodified click keeps using the
+overlay. The larger image is requested only when opening it; loading failures show a message
+without hiding the close button. The `smol` preview is requested only when that
+photo is selected, not when loading the map. Failed previews display a message
+and retain a link for opening the larger image. Place names are rendered as
+text, never as HTML. Popup width
+and image height adapt to narrow screens; tall content can scroll.
+
+Photos with identical coordinates share one marker. Clicking it fans out a
+separate circle for every photo, with lines to the original point. Select any
+circle to open that photo. Clicking the original group again or the map
+background collapses it, as do dragging, zooming, resizing, or selecting a place.
+Automatic panning to fit a popup keeps the group open. Only temporary display
+markers are offset; original photo coordinates remain unchanged.
+
+Selecting a place updates the menu, URL, screen-reader heading, and map view.
+Opening the map reads the configured photo source through the existing
+read-only API; it does not import or modify photo records.
 
 Press `Ctrl+C` to stop the web application and remove the database and pgconsole
 containers. Database contents remain in the `postgres18-data` Docker volume.

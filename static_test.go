@@ -17,8 +17,10 @@ func TestStaticAssets(t *testing.T) {
 		status                     int
 	}{
 		{path: "/static/css/style.css", contentType: "text/css", content: ".site-header", status: http.StatusOK},
+		{path: "/static/css/photo-popup.css", contentType: "text/css", content: ".photo-preview", status: http.StatusOK},
 		{path: "/static/js/places.js", contentType: "javascript", content: "updateSelectedPlace", status: http.StatusOK},
-		{path: "/static/js/map.js", contentType: "javascript", content: "L.map(container)", status: http.StatusOK},
+		{path: "/static/js/map.js", contentType: "javascript", content: "worldCopyJump: true", status: http.StatusOK},
+		{path: "/static/js/photo-popup.js", contentType: "javascript", content: "createPhotoPopup", status: http.StatusOK},
 		{path: "/static/vendor/mapbox/mapbox-logo.svg", contentType: "image/svg+xml", content: "<svg", status: http.StatusOK},
 		{path: "/static/icons/cat.svg", contentType: "image/svg+xml", content: "<svg", status: http.StatusOK},
 		{path: "/static/vendor/leaflet/leaflet.css", contentType: "text/css", content: ".leaflet-container", status: http.StatusOK},

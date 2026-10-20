@@ -11,7 +11,7 @@
     return;
   }
 
-  const map = L.map(container).setView([15, 105], 4);
+  const map = L.map(container, { worldCopyJump: true }).setView([15, 105], 4);
   const tiles = L.tileLayer(
     "https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}?access_token=" +
       encodeURIComponent(container.dataset.mapboxToken),
@@ -66,16 +66,107 @@
 
   const photoStatus = document.getElementById("photo-status");
   const markers = L.featureGroup().addTo(map);
+  const expandedMarkers = L.featureGroup().addTo(map);
+  const photoGroups = new Map();
   const photosByPlace = new Map();
   for (const option of document.querySelectorAll(".place-option")) {
     photosByPlace.set(option.dataset.placeId, []);
   }
   let photosLoaded = false;
   let totalPhotos = 0;
+  let expandedGroup = null;
+  let selectedMarker = null;
+  let popupAutoPan = false;
+
+  function createMarker(point, radius = 6) {
+    return L.circleMarker(point, {
+      radius,
+      color: "red",
+      weight: 2,
+      fillColor: "red",
+      fillOpacity: 0.2,
+      bubblingMouseEvents: false,
+    });
+  }
+
+  function collapseGroup() {
+    map.closePopup();
+    if (selectedMarker) {
+      selectedMarker.setStyle({ fillOpacity: 0.2 });
+      selectedMarker.closeTooltip();
+      selectedMarker = null;
+    }
+    expandedMarkers.clearLayers();
+    if (expandedGroup) {
+      expandedGroup.marker.setStyle({ opacity: 1, fillOpacity: 0.2 });
+      expandedGroup = null;
+    }
+  }
+
+  function selectMarker(marker, photo) {
+    if (selectedMarker) {
+      selectedMarker.setStyle({ fillOpacity: 0.2 });
+      selectedMarker.closeTooltip();
+    }
+    selectedMarker = marker;
+    marker.setStyle({ fillOpacity: 0.7 });
+    marker.closeTooltip();
+    const size = map.getSize();
+    L.popup({
+      className: "photo-popup",
+      minWidth: 0,
+      maxWidth: Math.max(120, Math.min(280, size.x - 64)),
+      maxHeight: Math.max(80, size.y - 128),
+      autoPanPaddingTopLeft: [16, 80],
+      autoPanPaddingBottomRight: [16, 16],
+      offset: [0, -8],
+    }).setLatLng(marker.getLatLng()).setContent(createPhotoPopup(photo)).openOn(map);
+  }
+
+  function expandGroup(group) {
+    const wasExpanded = expandedGroup === group;
+    collapseGroup();
+    if (wasExpanded) return;
+
+    expandedGroup = group;
+    group.marker.closeTooltip();
+    group.marker.setStyle({ opacity: 0.35, fillOpacity: 0.05 });
+    const count = group.photos.length;
+    const origin = [group.latitude, group.longitude];
+    const point = map.latLngToContainerPoint(origin);
+    const radius = Math.max(30, count * 24 / (2 * Math.PI));
+    const size = map.getSize();
+    const center = L.point(
+      Math.max(radius + 12, Math.min(size.x - radius - 12, point.x)),
+      Math.max(radius + 12, Math.min(size.y - radius - 12, point.y))
+    );
+
+    for (let i = 0; i < count; i++) {
+      const angle = i * 2 * Math.PI / count - Math.PI / 2;
+      // Pixel offsets affect only temporary markers, never photo coordinates.
+      const displayPoint = map.containerPointToLatLng(center.add([
+        radius * Math.cos(angle), radius * Math.sin(angle),
+      ]));
+      L.polyline([origin, displayPoint], {
+        color: "#555", weight: 1, opacity: 0.7, interactive: false,
+      }).addTo(expandedMarkers);
+      const marker = createMarker(displayPoint, 8)
+        .bindTooltip(`Photo ${i + 1} of ${count}`)
+        .addTo(expandedMarkers);
+      marker.on("click", () => selectMarker(marker, group.photos[i]));
+    }
+  }
+
+  map.on("click dragstart zoomstart resize", collapseGroup);
+  map.on("autopanstart", () => { popupAutoPan = true; });
+  map.on("moveend", () => { popupAutoPan = false; });
+  map.on("movestart", () => {
+    if (!popupAutoPan) collapseGroup();
+  });
 
   function showOverview() {
     photoStatus.hidden = true;
-    const count = markers.getLayers().length;
+    const count = Array.from(photoGroups.values()).reduce((sum, group) => sum + group.photos.length, 0);
     if (count > 0) {
       map.fitBounds(markers.getBounds(), { padding: [32, 32], maxZoom: 14 });
       photoStatus.textContent = `Showing ${count} of ${totalPhotos} photos on the map.`;
@@ -93,6 +184,7 @@
 
   function showSelectedPlace() {
     if (!photosLoaded) return;
+    collapseGroup();
 
     // Changing the menu label may change the header and map height.
     map.invalidateSize({ pan: false });
@@ -133,16 +225,31 @@
             !Number.isFinite(photo.longitude) || Math.abs(photo.longitude) > 180) {
           continue;
         }
-        // Places and photos use IDs from the same content database.
         photosByPlace.get(String(photo.location_id))?.push(photo);
 
-        L.circleMarker([photo.latitude, photo.longitude], {
-          radius: 6,
-          color: "red",
-          weight: 2,
-          fillColor: "red",
-          fillOpacity: 0.2,
-        }).addTo(markers);
+        const pointKey = JSON.stringify([photo.latitude, photo.longitude]);
+        if (!photoGroups.has(pointKey)) {
+          photoGroups.set(pointKey, {
+            latitude: photo.latitude,
+            longitude: photo.longitude,
+            photos: [],
+          });
+        }
+        photoGroups.get(pointKey).photos.push(photo);
+      }
+
+      for (const group of photoGroups.values()) {
+        group.marker = createMarker([group.latitude, group.longitude])
+          .bindTooltip(group.photos.length > 1 ? `${group.photos.length} photos — click to expand` : "Photo")
+          .addTo(markers);
+        group.marker.on("click", () => {
+          if (group.photos.length > 1) {
+            expandGroup(group);
+          } else {
+            collapseGroup();
+            selectMarker(group.marker, group.photos[0]);
+          }
+        });
       }
 
       totalPhotos = photos.length;
@@ -150,8 +257,10 @@
       // Read the current URL, including selections made while photos loaded.
       showSelectedPlace();
     } catch {
+      collapseGroup();
       photosLoaded = false;
       photosByPlace.clear();
+      photoGroups.clear();
       markers.clearLayers();
       photoStatus.textContent = "Photos could not be loaded. Please reload the page to try again.";
       photoStatus.hidden = false;

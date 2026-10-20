@@ -106,8 +106,10 @@ func TestHome(t *testing.T) {
 		`<link rel="stylesheet" href="/static/css/style.css">`,
 		`<script src="/static/js/places.js" defer></script>`,
 		`<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">`,
+		`<link rel="stylesheet" href="/static/css/photo-popup.css">`,
 		`<script src="/static/vendor/leaflet/leaflet.js" defer></script>`,
 		`<script src="/static/js/map.js" defer></script>`,
+		`<script src="/static/js/photo-popup.js" defer></script>`,
 		`id="photo-map"`,
 		`id="photo-status" role="status"`,
 		`data-mapbox-token="pk.example-public-map-token"`,
@@ -201,7 +203,7 @@ func TestLoginLayout(t *testing.T) {
 			if strings.Count(body, "<!doctype html>") != 1 || strings.Contains(body, `id="selected-place"`) || strings.Contains(body, "const selectedPlace") {
 				t.Error("login layout contains duplicate markup or homepage content/scripts")
 			}
-			if strings.Contains(body, "/static/vendor/leaflet/") || strings.Contains(body, "/static/js/map.js") {
+			if strings.Contains(body, "/static/vendor/leaflet/") || strings.Contains(body, "/static/js/map.js") || strings.Contains(body, "/static/js/photo-popup.js") || strings.Contains(body, "/static/css/photo-popup.css") {
 				t.Error("login page loaded the homepage-only Leaflet assets")
 			}
 			if tt.method == http.MethodPost {
