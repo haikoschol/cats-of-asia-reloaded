@@ -109,7 +109,10 @@ Photos without valid coordinates are skipped. The normal view shows only the
 header and the map, without a selected-place heading, instructions, or photo
 count above it. There is no divider line below the header, and the map fills
 the remaining window height. Drag to pan and use the +/− buttons or mouse wheel
-to zoom. The browser fetches Mapbox Streets v12 raster tiles directly; internet
+to zoom. Horizontal panning uses Leaflet's `worldCopyJump`: when the map repeats
+around the world, the view returns seamlessly to the world copy containing the
+photo markers. This does not duplicate photos or alter their coordinates.
+The browser fetches Mapbox Streets v12 raster tiles directly; internet
 access is needed. Tile requests count towards the Mapbox account's usage.
 If the token has URL restrictions, allow `http://localhost:3000` for local work
 and the actual site URL for deployment. Never use a secret `sk.` token here.

@@ -11,7 +11,7 @@
     return;
   }
 
-  const map = L.map(container).setView([15, 105], 4);
+  const map = L.map(container, { worldCopyJump: true }).setView([15, 105], 4);
   const tiles = L.tileLayer(
     "https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}?access_token=" +
       encodeURIComponent(container.dataset.mapboxToken),
