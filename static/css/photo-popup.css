@@ -10,17 +10,19 @@
   overflow-wrap: anywhere;
 }
 
-.photo-preview-button {
+.photo-preview-link {
+  display: block;
   width: 100%;
   padding: 0;
   border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
+  text-decoration: none;
   cursor: zoom-in;
 }
 
-.photo-preview-button:focus-visible {
+.photo-preview-link:focus-visible {
   outline: 3px solid #2276c9;
   outline-offset: 3px;
 }

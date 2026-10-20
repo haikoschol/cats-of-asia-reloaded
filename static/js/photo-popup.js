@@ -81,22 +81,26 @@ function createPhotoPopup(photo) {
   error.hidden = Boolean(previewURL && largerURL);
 
   if (previewURL && largerURL) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "photo-preview-button";
-    button.setAttribute("aria-label", "Open full-size photo");
-    button.addEventListener("click", () => openPhotoViewer(largerURL, `Photo taken in ${place}`));
+    const link = document.createElement("a");
+    link.href = largerURL;
+    link.className = "photo-preview-link";
+    link.setAttribute("aria-label", "Open full-size photo");
+    link.addEventListener("click", event => {
+      if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      openPhotoViewer(largerURL, `Photo taken in ${place}`);
+    });
     const image = document.createElement("img");
     image.className = "photo-preview";
     image.alt = `Photo taken in ${place}`;
     image.decoding = "async";
     image.addEventListener("error", () => {
-      button.textContent = "Open larger photo";
+      link.textContent = "Open larger photo";
       error.hidden = false;
     }, { once: true });
     image.src = previewURL;
-    button.append(image);
-    content.append(button);
+    link.append(image);
+    content.append(link);
   }
   content.append(error);
   return content;

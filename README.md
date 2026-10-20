@@ -127,10 +127,12 @@ Click a photo marker to open a preview with its place and capture time (shown
 explicitly in UTC). Click the preview to open the larger `desktop` image in a
 full-window overlay in the same tab. Close it using the **×** button at the
 top right or **Escape** to return to the unchanged map and popup. The larger
-image is requested only when opening this view; loading failures show a message
+image is also the preview's link target: use the browser's right-click menu or
+Ctrl/Cmd-click to open it in a separate tab. An unmodified click keeps using the
+overlay. The larger image is requested only when opening it; loading failures show a message
 without hiding the close button. The `smol` preview is requested only when that
 photo is selected, not when loading the map. Failed previews display a message
-and retain a button for opening the larger image. Place names are rendered as
+and retain a link for opening the larger image. Place names are rendered as
 text, never as HTML. Popup width
 and image height adapt to narrow screens; tall content can scroll.
 
