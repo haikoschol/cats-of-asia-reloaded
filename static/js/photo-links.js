@@ -47,18 +47,17 @@ function createPhotoShare(photoID, getZoomLevel, onContentChange = () => {}) {
   status.setAttribute("role", "status");
   status.hidden = true;
 
-  const manual = document.createElement("label");
+  const manual = document.createElement("div");
   manual.className = "photo-share-manual";
-  manual.textContent = "Photo link (select and copy)";
+  manual.textContent = "Photo link (press and hold)";
   manual.hidden = true;
-  const input = document.createElement("input");
-  input.type = "url";
-  input.readOnly = true;
-  manual.append(input);
+  const link = document.createElement("a");
+  manual.append(link);
 
   button.addEventListener("click", async () => {
     const url = createPhotoLink(photoID, getZoomLevel());
-    input.value = url;
+    link.href = url;
+    link.textContent = url;
     manual.hidden = true;
     status.hidden = true;
     button.disabled = true;
@@ -78,15 +77,14 @@ function createPhotoShare(photoID, getZoomLevel, onContentChange = () => {}) {
         status.textContent = "Photo link copied.";
       } catch {
         manual.hidden = false;
-        status.textContent = "Automatic copying is unavailable. Copy the link below.";
+        status.textContent = "Automatic copying is unavailable. Press and hold the link below to share or copy it.";
       }
       status.hidden = false;
     } finally {
       button.disabled = false;
       onContentChange();
       if (!manual.hidden) {
-        input.focus({ preventScroll: true });
-        input.select();
+        link.focus({ preventScroll: true });
       }
     }
   });

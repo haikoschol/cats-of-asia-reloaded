@@ -180,7 +180,11 @@ Use **Share photo** in the popup to open the device's sharing menu, when the
 browser supports it. Otherwise, **Copy photo link** copies the link and shows a
 confirmation. If sharing fails, copying is attempted; cancelling the sharing
 menu does not copy anything. If automatic copying is unavailable or denied, a
-read-only field displays the link for manual copying. Native sharing and
+a photo link appears in the same field. On a phone, press and hold that link
+and choose **Share link** or **Copy link address** (wording varies by browser).
+The field is an actual link, not automatically selected text: sharing selected
+text can produce a quoted excerpt plus a `#:~:text=` page link instead of the
+plain photo URL. Native sharing and
 clipboard access depend on browser support and permissions; use HTTPS in
 deployment (localhost is suitable for local development).
 
