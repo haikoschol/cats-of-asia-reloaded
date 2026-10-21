@@ -110,6 +110,7 @@ func TestHome(t *testing.T) {
 		`<script src="/static/vendor/leaflet/leaflet.js" defer></script>`,
 		`<script src="/static/js/map.js" defer></script>`,
 		`<script src="/static/js/photo-popup.js" defer></script>`,
+		`<script src="/static/js/photo-links.js" defer></script>`,
 		`id="photo-map"`,
 		`id="photo-status" role="status"`,
 		`data-mapbox-token="pk.example-public-map-token"`,
@@ -203,8 +204,13 @@ func TestLoginLayout(t *testing.T) {
 			if strings.Count(body, "<!doctype html>") != 1 || strings.Contains(body, `id="selected-place"`) || strings.Contains(body, "const selectedPlace") {
 				t.Error("login layout contains duplicate markup or homepage content/scripts")
 			}
-			if strings.Contains(body, "/static/vendor/leaflet/") || strings.Contains(body, "/static/js/map.js") || strings.Contains(body, "/static/js/photo-popup.js") || strings.Contains(body, "/static/css/photo-popup.css") {
-				t.Error("login page loaded the homepage-only Leaflet assets")
+			for _, asset := range []string{
+				"/static/vendor/leaflet/", "/static/js/map.js", "/static/js/photo-popup.js",
+				"/static/js/photo-links.js", "/static/css/photo-popup.css",
+			} {
+				if strings.Contains(body, asset) {
+					t.Errorf("login page loaded homepage-only asset %s", asset)
+				}
 			}
 			if tt.method == http.MethodPost {
 				if !strings.Contains(body, "Username and password are required.") || !strings.Contains(body, `value="&lt;script&gt;"`) {

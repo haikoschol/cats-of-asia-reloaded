@@ -105,7 +105,9 @@ latitude and longitude. Without a valid place selection, the initial view fits a
 with a maximum initial zoom of 14
 so a single photo does not zoom in too far. If there are no photos with valid
 coordinates, the map stays centered on Southeast Asia and displays a message.
-Photos without valid coordinates are skipped. The normal view shows only the
+Photos without valid coordinates are skipped. A direct photo link, described
+below, takes precedence over the initial overview or place selection.
+The normal view shows only the
 header and the map, without a selected-place heading, instructions, or photo
 count above it. There is no divider line below the header, and the map fills
 the remaining window height. Drag to pan and use the +/− buttons or mouse wheel
@@ -158,6 +160,45 @@ Both start scripts wait up to 120 seconds for services to become ready after
 container startup. The database healthcheck connects over TCP, so the temporary
 initialization server cannot report readiness too early. Startup failures print
 container logs before cleanup.
+
+### Direct photo links and sharing
+
+Open `/?id=<photo-uuid>&zoomLevel=15` to centre the map on that photo and open
+its preview. Use an actual photo `id` from `/api/photos`, not its `sha256` or
+`location_id`. If several photos share the same coordinates, the group expands
+and the linked photo is selected.
+
+`zoomLevel` accepts whole numbers from 1 to 22 and defaults to 15 when omitted.
+An invalid zoom displays a notice and uses 15. Invalid or duplicate photo IDs,
+unknown photos, and photos without valid coordinates display a notice instead
+of opening an unrelated photo; the map falls back to the selected place or the
+overview. A valid photo link takes precedence over `place`. Selecting a place
+from the menu removes `id` and `zoomLevel` from the URL and closes the popup.
+Reloading or using Back/Forward restores the photo or place specified by the URL.
+
+Use **Share photo** in the popup to open the device's sharing menu, when the
+browser supports it. Otherwise, **Copy photo link** copies the link and shows a
+confirmation. If sharing fails, copying is attempted; cancelling the sharing
+menu does not copy anything. If automatic copying is unavailable or denied, a
+a photo link appears in the same field. On a phone, press and hold that link
+and choose **Share link** or **Copy link address** (wording varies by browser).
+The field is an actual link, not automatically selected text: sharing selected
+text can produce a quoted excerpt plus a `#:~:text=` page link instead of the
+plain photo URL. Native sharing and
+clipboard access depend on browser support and permissions; use HTTPS in
+deployment (localhost is suitable for local development).
+
+Links contain only the photo UUID and current map zoom, using the current
+site's scheme, hostname, and port. No production hostname is hard-coded.
+A localhost link works only on the computer running the app; use the deployed
+site's URL when sharing with other people. Sharing sends a link, not the image
+file, and does not modify the photo database.
+
+To check the feature locally, start `./scripts/run.sh`, select a photo, and copy
+its link from the popup. Open that link to verify the same photo and zoom, then
+select a place and use Back/Forward. Try `zoomLevel=invalid` and an unknown UUID
+to check the notices. Check the native sharing menu on a supporting browser or
+phone; a narrow desktop viewport only checks layout, not device integration.
 
 ### Existing PostgreSQL 17 databases
 
@@ -262,8 +303,8 @@ environment, not in `.env.example`.
 | `CLOUDFLARE_IMAGES_ACCOUNT_HASH` | Public account identifier used in image URLs | Required when the photo API returns photos |
 | `MAPBOX_ACCESS_TOKEN` | Public browser token for fetching map tiles | Required when displaying a map |
 
-The homepage displays a map with photo markers when a public Mapbox token is
-configured; it does not display photo images yet. The photo API checks the
+The homepage displays a map with photo markers and selectable previews when a
+public Mapbox token and valid image settings are configured. The photo API checks the
 image domain and account hash
 when photos exist; an empty result needs neither. Creating user
 accounts uses only the users connection, although both URLs must be configured. Missing required settings produce

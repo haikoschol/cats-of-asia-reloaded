@@ -40,6 +40,51 @@
   color: #a00;
 }
 
+.photo-share {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.photo-share-manual {
+  min-width: 0;
+}
+
+.photo-share-button,
+.photo-share-manual a {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem;
+  border: 1px solid #777;
+  border-radius: 4px;
+  background: #fff;
+  color: #111;
+  font: inherit;
+}
+
+.photo-share-button {
+  cursor: pointer;
+}
+
+.photo-share-manual a {
+  display: block;
+  margin-top: 0.5rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.photo-share-button:focus-visible,
+.photo-share-manual a:focus-visible {
+  outline: 3px solid #2276c9;
+  outline-offset: 2px;
+}
+
+.photo-popup .photo-share-status {
+  margin: 0;
+}
+
 .photo-viewer {
   box-sizing: border-box;
   position: fixed;

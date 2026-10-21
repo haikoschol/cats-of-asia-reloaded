@@ -40,7 +40,7 @@ function openPhotoViewer(url, description) {
   image.src = url;
 }
 
-function createPhotoPopup(photo) {
+function createPhotoPopup(photo, getZoomLevel, onContentChange) {
   const content = document.createElement("article");
   content.className = "photo-details";
   const place = [photo.city, photo.country]
@@ -102,6 +102,6 @@ function createPhotoPopup(photo) {
     link.append(image);
     content.append(link);
   }
-  content.append(error);
+  content.append(error, createPhotoShare(photo.id, getZoomLevel, onContentChange));
   return content;
 }
