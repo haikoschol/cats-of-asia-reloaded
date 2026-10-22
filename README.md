@@ -83,12 +83,16 @@ Places menu is also available on the login page; selecting a place there opens
 the homepage with that selection. Escape closes the menu and returns focus to
 its toggle; clicking outside also closes it.
 
-Go serves the shared stylesheet, place-selector JavaScript, SVG site icon, and
-vendored frontend assets from `static/` under `/static/`. Missing static files
-return 404. No CDN, package installation, or separate frontend build is required
-to run the app. Run the app from the repository root so both
-`template/` and `static/` can be found. Changes to CSS or JavaScript do not require
-recompiling Go; reload the browser (bypassing its cache if needed).
+Go embeds the HTML templates in `template/` and all frontend assets in `static/`
+into the executable at build time. The shared stylesheet, JavaScript, site icon,
+and vendored assets are served under the same `/static/` URLs. Missing static
+files return 404. No CDN, package installation, or separate frontend build is
+required to run the app.
+
+After changing HTML, CSS, JavaScript, or other embedded files, rebuild and restart
+the app; a browser reload alone does not pick up source-file changes. Restarting
+`./scripts/run.sh` performs the build automatically. Reload the browser afterwards,
+bypassing its cache if needed.
 
 The homepage additionally loads the pinned Leaflet 1.9.4 JavaScript and CSS from
 `static/vendor/leaflet/`; the login page does not load Leaflet. The upstream
@@ -277,7 +281,7 @@ values. A missing file is allowed when settings are supplied by the deployment
 environment. An unreadable or malformed file stops startup with a generic error
 that does not include its contents.
 
-For direct execution, build the app and run it from the repository root while
+For direct execution, build the app from the repository root and run it while
 the users database is already running:
 
 ```bash
@@ -285,9 +289,17 @@ go build .
 ./cats-of-asia-reloaded
 ```
 
-The executable reads `.env` itself; no shell export step is needed. On a server,
-provide settings through the service environment instead. `scripts/run.sh`
-remains the convenient development command that also starts the containers.
+The executable can be copied to another directory or server without the
+`template/` and `static/` directories. Database access and configuration are still
+required; photo images remain at the configured image service, not inside the
+executable. Only the web resources are embedded, never `.env`, database contents,
+or `pgconsole.toml`.
+
+The executable reads `.env` from its current working directory; no shell export
+step is needed when that file is present. Alternatively, supply configuration
+through environment variables. On a server, use the service environment.
+`scripts/run.sh` remains the convenient development command that also starts the
+containers and should still be run from the repository root.
 
 `.env.example` contains harmless example values. If you already have a `.env`
 file, add the new settings to it as needed instead of replacing your database

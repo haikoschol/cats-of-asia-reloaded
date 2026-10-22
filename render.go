@@ -29,7 +29,7 @@ func (app *application) renderLogin(w http.ResponseWriter, r *http.Request, stat
 
 func (app *application) renderPage(w http.ResponseWriter, status int, page string, data templateData) {
 	// Parse one page at a time so its blocks cannot overwrite another page's.
-	tmpl, err := template.ParseFiles("./template/base.tmpl", "./template/header.tmpl", "./template/"+page)
+	tmpl, err := template.ParseFS(templateFiles, "template/base.tmpl", "template/header.tmpl", "template/"+page)
 	if err != nil {
 		log.Printf("template parse error: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
