@@ -68,7 +68,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="coa-${GITHUB_SHA:0:12}"
+          VERSION="coa-${GITHUB_SHA:0:7}"
           BINARY="${VERSION}-linux-amd64"
           mkdir -p dist
           go build -trimpath -o "dist/$BINARY" .

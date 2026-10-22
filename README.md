@@ -499,43 +499,16 @@ require real service credentials.
 
 `.github/workflows/release.yml` runs the existing `./scripts/run-tests.sh` on
 pull requests targeting `main` and on pushes to `main` (including merged PRs).
-Tests run on a GitHub-hosted Ubuntu runner with a separate PostGIS container and
-disposable test credentials. Neither a local `.env` nor production credentials
-are required. The test job has read-only repository permissions.
+Tests use an isolated PostGIS database; no production credentials are needed.
 
-Only a successful push-to-`main` test run starts the release job. It uses the Go
-version in `go.mod` to build a Linux x86-64 (`amd64`) executable with CGO disabled
-and embedded web resources. The release tag is `coa-` followed by the first
-12 characters of the commit SHA. Each release contains exactly the build outputs:
+After tests pass on `main`, the workflow publishes a Linux amd64 binary with
+embedded web resources and a SHA-256 checksum under **Releases**. Versions use
+the first seven characters of the commit SHA: `coa-<7-character-sha>`.
+Follow test and build results under **Actions → Test and release**.
 
-- `coa-<12-character-sha>-linux-amd64`
-- `coa-<12-character-sha>-linux-amd64.sha256`
-
-The release notes record the full commit SHA. Files are uploaded to a draft
-before publication, so a published release is not announced while uploads are
-still in progress. A rerun can resume an unfinished draft for the same commit;
-already published releases are left unchanged. A version referring to a
-different commit fails rather than overwriting it. Releases are addressed by
-their version, not the GitHub "Latest" alias, which this workflow does not set.
-
-Find runs under **Actions → Test and release** and downloads under **Releases**.
-Download the binary and its checksum into the same directory, then run
-`sha256sum -c <binary-name>.sha256` and `chmod +x <binary-name>` on Linux.
-Database access and runtime configuration are still needed to start the app;
-no credentials or database contents are packaged into the release.
-
-Publishing uses GitHub's automatic `GITHUB_TOKEN` with `contents: write` only in
-the release job; no personal access token or server SSH key is needed. Checkout
-and Go setup actions are pinned to full commit SHAs. If repository or organization
-policy restricts Actions or token permissions, the owner must allow this workflow
-to run and create releases. PR checks do not enforce merging rules unless the
-owner makes the **Go tests** check required in branch protection or a ruleset.
-
-The repository's visibility is not changed by the workflow: private-repository
-releases still require authentication. Anonymous server downloads require the
-separately agreed move to a public repository after checking its history for
-secrets. This step does not configure a server, DNS, webhooks, deployment or
-rollback; it only tests, builds and publishes versioned files.
+Releases do not deploy the app to a server. Database access and runtime
+configuration are still required, and private-repository downloads require
+authentication.
 
 ## Inspecting the local database
 
