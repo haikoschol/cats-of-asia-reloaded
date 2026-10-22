@@ -495,6 +495,21 @@ credentials to check that homepage HTML and database-configuration startup error
 logs do not expose them. They do not contact Cloudflare or Mapbox and do not
 require real service credentials.
 
+## Automated tests and Linux releases on GitHub
+
+`.github/workflows/release.yml` runs the existing `./scripts/run-tests.sh` on
+pull requests targeting `main` and on pushes to `main` (including merged PRs).
+Tests use an isolated PostGIS database; no production credentials are needed.
+
+After tests pass on `main`, the workflow publishes a Linux amd64 binary with
+embedded web resources and a SHA-256 checksum under **Releases**. Versions use
+the first seven characters of the commit SHA: `coa-<7-character-sha>`.
+Follow test and build results under **Actions → Test and release**.
+
+Releases do not deploy the app to a server. Database access and runtime
+configuration are still required, and private-repository downloads require
+authentication.
+
 ## Inspecting the local database
 
 Both `scripts/run.sh` and `scripts/run-tests.sh` apply `scripts/schema.sql`.

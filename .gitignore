@@ -1,3 +1,4 @@
 .env
 /cats-of-asia-reloaded
+/dist/
 pgconsole.toml
