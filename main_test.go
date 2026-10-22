@@ -51,6 +51,7 @@ func TestHome(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Chdir(t.TempDir())
 
 	databaseURL := testDatabaseURL(t)
 
@@ -157,6 +158,7 @@ func TestHome(t *testing.T) {
 }
 
 func TestLoginLayout(t *testing.T) {
+	t.Chdir(t.TempDir())
 	databaseURL := testDatabaseURL(t)
 	db, err := sql.Open("pgx", databaseURL)
 	if err != nil {

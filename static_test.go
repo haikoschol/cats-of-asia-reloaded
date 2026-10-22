@@ -10,6 +10,7 @@ import (
 )
 
 func TestStaticAssets(t *testing.T) {
+	t.Chdir(t.TempDir())
 	app := &application{sessionManager: scs.New()}
 	handler := app.routes()
 	for _, tt := range []struct {
@@ -30,6 +31,9 @@ func TestStaticAssets(t *testing.T) {
 		{path: "/static/missing.css", status: http.StatusNotFound},
 		{path: "/static/.env", status: http.StatusNotFound},
 		{path: "/static/%2e%2e/.env", status: http.StatusNotFound},
+		{path: "/static/template/base.tmpl", status: http.StatusNotFound},
+		{path: "/static/scripts/schema.sql", status: http.StatusNotFound},
+		{path: "/static/pgconsole.toml", status: http.StatusNotFound},
 	} {
 		t.Run(tt.path, func(t *testing.T) {
 			w := httptest.NewRecorder()
