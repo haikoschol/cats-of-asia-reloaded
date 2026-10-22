@@ -1,0 +1,104 @@
+name: Test and release
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  test:
+    name: Go tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      POSTGRES_USER: cats_test
+      POSTGRES_PASSWORD: cats-test-only
+      POSTGRES_DB: cats_test
+      DATABASE_URL: postgres://cats_test:cats-test-only@localhost:5433/cats_test?sslmode=disable
+      USERS_DATABASE_URL: postgres://cats_test:cats-test-only@localhost:5433/cats_test?sslmode=disable
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Run tests with an isolated database
+        run: ./scripts/run-tests.sh
+
+  release:
+    name: Linux release
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: release-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - name: Check out tested commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Build Linux binary and checksum
+        id: build
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: amd64
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="coa-${GITHUB_SHA:0:12}"
+          BINARY="${VERSION}-linux-amd64"
+          mkdir -p dist
+          go build -trimpath -o "dist/$BINARY" .
+          (cd dist && sha256sum "$BINARY" > "$BINARY.sha256")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Publish completed release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ steps.build.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BINARY="${VERSION}-linux-amd64"
+
+          if RELEASE_INFO=$(gh release view "$VERSION" --json isDraft,targetCommitish --jq '[.isDraft, .targetCommitish] | @tsv'); then
+            read -r IS_DRAFT TARGET_COMMIT <<< "$RELEASE_INFO"
+            if [[ "$TARGET_COMMIT" != "$GITHUB_SHA" ]]; then
+              echo "Release version already refers to a different commit." >&2
+              exit 1
+            fi
+            if [[ "$IS_DRAFT" == 'false' ]]; then
+              echo "Release already published; leaving its files unchanged."
+              exit 0
+            fi
+          else
+            gh release create "$VERSION" --draft --target "$GITHUB_SHA" \
+              --title "$VERSION" --notes "Linux amd64 binary with embedded web assets. Commit: $GITHUB_SHA"
+          fi
+
+          gh release upload "$VERSION" "dist/$BINARY" "dist/$BINARY.sha256" --clobber
+          gh release edit "$VERSION" --draft=false --latest=false
