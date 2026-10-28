@@ -9,6 +9,7 @@
 
 {{define "pageScripts"}}
   <script src="/static/vendor/leaflet/leaflet.js" defer></script>
+  <script src="/static/js/toast.js" defer></script>
   <script src="/static/js/photo-links.js" defer></script>
   <script src="/static/js/photo-popup.js" defer></script>
   <script src="/static/js/map.js" defer></script>
@@ -20,6 +21,7 @@
     <div class="map-messages">
       <p id="map-status" role="status"{{if not .MapError}} hidden{{end}}>{{if .MapError}}{{.MapError}}{{else}}Loading map…{{end}}</p>
       <p id="photo-status" role="status" hidden></p>
+      <div id="toast-messages" class="toast-messages" aria-live="polite" aria-relevant="additions"></div>
     </div>
     <div id="photo-map" class="map-container" data-mapbox-token="{{.MapboxAccessToken}}" aria-label="Interactive map" aria-describedby="map-status"></div>
     <noscript><p>Enable JavaScript to view the interactive map.</p></noscript>

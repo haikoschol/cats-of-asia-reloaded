@@ -2,16 +2,18 @@
 
 function readPhotoLink(url) {
   const params = url.searchParams;
-  if (!params.has("id")) return null;
+  if (!params.has("id") && !params.has("zoomLevel")) return null;
 
-  const result = { photoID: null, zoomLevel: 15, warning: "" };
+  const result = { photoID: null, zoomLevel: 15, warnings: [] };
   const ids = params.getAll("id");
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (ids.length !== 1 || !uuid.test(ids[0])) {
-    result.warning = "Invalid photo ID in link.";
-    return result;
+  if (params.has("id")) {
+    if (ids.length !== 1 || !uuid.test(ids[0])) {
+      result.warnings.push("Invalid photo ID in link.");
+    } else {
+      result.photoID = ids[0].toLowerCase();
+    }
   }
-  result.photoID = ids[0].toLowerCase();
 
   if (params.has("zoomLevel")) {
     const zoomValues = params.getAll("zoomLevel");
@@ -20,7 +22,7 @@ function readPhotoLink(url) {
         Number.isInteger(zoom) && zoom >= 1 && zoom <= 22) {
       result.zoomLevel = zoom;
     } else {
-      result.warning = "Invalid zoom level in photo link: use a whole number from 1 to 22.";
+      result.warnings.push("Invalid zoom level in photo link: use a whole number from 1 to 22.");
     }
   }
   return result;
