@@ -224,11 +224,13 @@
     if (!photosLoaded) return;
     const photoLink = readPhotoLink(new URL(window.location.href));
     const photo = photoLink?.photoID ? photosByID.get(photoLink.photoID) : null;
+    for (const warning of photoLink?.warnings ?? []) {
+      showToast(warning);
+    }
 
     if (photo && hasValidCoordinates(photo)) {
       collapseGroup();
-      photoStatus.textContent = photoLink.warning;
-      photoStatus.hidden = !photoLink.warning;
+      photoStatus.hidden = true;
       map.invalidateSize({ pan: false });
       // Finish moving before opening a popup or expanding overlapping photos.
       map.setView([photo.latitude, photo.longitude], photoLink.zoomLevel, { animate: false });
@@ -242,15 +244,10 @@
     }
 
     showSelectedPlace();
-    let warning = photoLink?.warning;
     if (photoLink?.photoID) {
-      warning = photo
+      showToast(photo
         ? "This photo has no valid coordinates and cannot be shown on the map."
-        : "Photo not found. The link may be outdated.";
-    }
-    if (warning) {
-      photoStatus.textContent = warning;
-      photoStatus.hidden = false;
+        : "Photo not found. The link may be outdated.");
     }
   }
 
