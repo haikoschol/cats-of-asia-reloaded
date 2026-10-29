@@ -69,7 +69,8 @@ Selecting a place stores its database ID in the URL, for example `/?place=1`.
 Reloading the page or opening that link restores the selection, provided the
 place exists in that database. The browser's Back and Forward buttons restore
 earlier selections and move the map accordingly. Missing or unknown IDs leave
-no place selected, reset the menu label to **Places**, and show the map overview.
+no place selected, reset the menu label to **Places**, and restore the last map
+view, falling back to the map overview when no valid saved view exists.
 
 Selecting a place centres the map on its first photo with valid coordinates,
 in photo API order, at zoom level 14. Selection waits for the photo request to
@@ -105,11 +106,17 @@ Set `MAPBOX_ACCESS_TOKEN` in your ignored `.env` to a working **public** Mapbox
 browser token starting with `pk.`, then start or restart `./scripts/run.sh`.
 Open [http://localhost:3000](http://localhost:3000) to see the map. The browser
 loads `/api/photos` and places a red circle at each distinct point with valid
-latitude and longitude. Without a valid place selection, the initial view fits all markers,
-with a maximum initial zoom of 14
-so a single photo does not zoom in too far. If there are no photos with valid
-coordinates, the map stays centered on Southeast Asia and displays a message.
-Photos without valid coordinates are skipped. A direct photo link, described
+latitude and longitude. A valid photo link takes priority, followed by a valid
+place selection. Without a photo link or valid place selection, photo loading
+and browser location lookup start in parallel. A returned location is shown
+immediately, even while photos are loading, and is retained when photos arrive.
+Photo links are resolved first; an unknown photo falls back to location lookup.
+While waiting, the map restores its last saved position and zoom. If no valid saved view exists, the initial view
+fits all markers, with a maximum initial zoom of 14 so a single photo does not
+zoom in too far. Without a saved view or photos with valid coordinates, the map
+stays centered on Southeast Asia. Photos without valid coordinates are skipped;
+if none can be shown, a message appears while retaining any saved view.
+A direct photo link, described
 below, takes precedence over the initial overview or place selection.
 The normal view shows only the
 header and the map, without a selected-place heading, instructions, or photo
@@ -122,6 +129,25 @@ The browser fetches Mapbox Streets v12 raster tiles directly; internet
 access is needed. Tile requests count towards the Mapbox account's usage.
 If the token has URL restrictions, allow `http://localhost:3000` for local work
 and the actual site URL for deployment. Never use a secret `sk.` token here.
+
+Position and zoom are saved in this browser's local storage after moving or
+zooming the map; they are not stored on the application server. Photo and place links take
+priority over the saved view. Invalid saved values are ignored, including
+out-of-range coordinates or zoom; zero coordinates are valid. If browser
+storage is blocked or full, the map remains usable but may not remember changes
+across visits.
+
+Browser location requires permission and HTTPS (or localhost). An accepted
+location uses at least zoom 14 for a city-level view, retaining a closer saved
+zoom if available. Denied permission,
+unavailable support, invalid coordinates, or a location timeout after 30 seconds
+leave the fallback view usable and show a dismissible notification explaining
+the failure. Granting permission alone does not guarantee the browser can
+determine a position. Moving, zooming or interacting with the map,
+selecting a place, or using Back/Forward cancels automatic positioning for that
+page visit, so a late answer cannot override your choice. Location is requested
+once, not continuously tracked; it is stored only as part of the browser's map
+view. Mapbox still receives the usual tile requests for the visible map area.
 
 Missing configuration, tile-loading failures, and photo API failures produce
 visible notices over the map. Empty photo results also show a notice. Tile
@@ -175,8 +201,8 @@ and the linked photo is selected.
 `zoomLevel` accepts whole numbers from 1 to 22 and defaults to 15 when omitted.
 An invalid zoom displays a notice and uses 15. Invalid or duplicate photo IDs,
 unknown photos, and photos without valid coordinates display a notice instead
-of opening an unrelated photo; the map falls back to the selected place or the
-overview. A valid photo link takes precedence over `place`. Selecting a place
+of opening an unrelated photo; the map falls back to the selected place, saved
+view, or overview. A valid photo link takes precedence over `place`. Selecting a place
 from the menu removes `id` and `zoomLevel` from the URL and closes the popup.
 Reloading or using Back/Forward restores the photo or place specified by the URL.
 

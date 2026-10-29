@@ -11,7 +11,104 @@
     return;
   }
 
-  const map = L.map(container, { worldCopyJump: true }).setView([15, 105], 4);
+  const mapViewKey = "cats-of-asia.map-view";
+
+  function validMapView(view) {
+    return view &&
+      Number.isFinite(view.latitude) && Math.abs(view.latitude) <= 90 &&
+      Number.isFinite(view.longitude) && Math.abs(view.longitude) <= 180 &&
+      Number.isInteger(view.zoom) && view.zoom >= 1 && view.zoom <= 22;
+  }
+
+  function readMapView() {
+    try {
+      const view = JSON.parse(window.localStorage.getItem(mapViewKey));
+      return validMapView(view) ? view : null;
+    } catch {
+      // Storage may be blocked, or a previously saved value may be malformed.
+      return null;
+    }
+  }
+
+  let savedView = readMapView();
+  const locationZoom = Math.max(savedView ? savedView.zoom : 14, 14);
+  let rememberView = false;
+  let automaticView = true;
+  let locationRequested = false;
+  let browserLocationApplied = false;
+  const map = L.map(container, { worldCopyJump: true }).setView(
+    savedView ? [savedView.latitude, savedView.longitude] : [15, 105],
+    savedView ? savedView.zoom : 4
+  );
+
+  function saveMapView() {
+    // Do not replace saved values with a temporary view during initialization.
+    if (!rememberView) return;
+    const center = map.getCenter().wrap();
+    const view = { latitude: center.lat, longitude: center.lng, zoom: map.getZoom() };
+    if (!validMapView(view)) return;
+    savedView = view;
+    try {
+      window.localStorage.setItem(mapViewKey, JSON.stringify(view));
+    } catch {
+      // The map remains usable when browser storage is unavailable or full.
+    }
+  }
+
+  map.on("moveend zoomend", saveMapView);
+
+  function keepCurrentView() {
+    automaticView = false;
+    rememberView = true;
+  }
+
+  // Capture input before Leaflet handles it, including during photo loading.
+  for (const event of ["pointerdown", "touchstart", "wheel", "keydown"]) {
+    container.addEventListener(event, keepCurrentView, { capture: true, passive: true });
+  }
+  map.on("dragstart", keepCurrentView);
+
+  function useBrowserLocation() {
+    if (!automaticView || locationRequested) return;
+    locationRequested = true;
+    const requestedURL = window.location.href;
+    const locationTimeout = 30000;
+    function showLocationError(message) {
+      if (automaticView && window.location.href === requestedURL) {
+        showToast(message + " Keeping the current map view.");
+      }
+    }
+    try {
+      if (typeof navigator.geolocation?.getCurrentPosition !== "function") {
+        showLocationError("Browser location is not available here.");
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => {
+          if (!automaticView || window.location.href !== requestedURL) return;
+          if (!hasValidCoordinates(coords)) {
+            showLocationError("The browser returned an invalid location.");
+            return;
+          }
+          browserLocationApplied = true;
+          rememberView = true;
+          map.setView([coords.latitude, coords.longitude], locationZoom, { animate: false });
+        },
+        (error) => {
+          const messages = {
+            1: "Location access was denied. Check the location permissions in your browser and system settings.",
+            2: "Your browser could not determine your location, even with permission.",
+            3: `The browser did not return a location within ${locationTimeout / 1000} seconds. Reload the page to try again.`,
+          };
+          showLocationError(messages[error.code] ?? "Browser location could not be determined.");
+        },
+        { timeout: locationTimeout, maximumAge: 60000, enableHighAccuracy: false }
+      );
+    } catch {
+      showLocationError("Browser location could not be requested.");
+    }
+  }
+
   const tiles = L.tileLayer(
     "https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}?access_token=" +
       encodeURIComponent(container.dataset.mapboxToken),
@@ -179,17 +276,21 @@
     if (!popupAutoPan) collapseGroup();
   });
 
-  function showOverview() {
+  function showSavedViewOrOverview() {
     photoStatus.hidden = true;
     const count = Array.from(photoGroups.values()).reduce((sum, group) => sum + group.photos.length, 0);
+    const showFallback = automaticView && !browserLocationApplied;
+    if (showFallback && savedView) {
+      map.setView([savedView.latitude, savedView.longitude], savedView.zoom);
+    }
     if (count > 0) {
-      map.fitBounds(markers.getBounds(), { padding: [32, 32], maxZoom: 14 });
+      if (showFallback && !savedView) map.fitBounds(markers.getBounds(), { padding: [32, 32], maxZoom: 14 });
       photoStatus.textContent = `Showing ${count} of ${totalPhotos} photos on the map.`;
       if (count < totalPhotos) {
         photoStatus.textContent += " Photos without valid coordinates are not shown.";
       }
     } else {
-      map.setView([15, 105], 4);
+      if (showFallback && !savedView) map.setView([15, 105], 4);
       photoStatus.hidden = false;
       photoStatus.textContent = totalPhotos === 0
         ? "No photos available yet."
@@ -205,19 +306,20 @@
     map.invalidateSize({ pan: false });
     const placeId = new URL(window.location.href).searchParams.get("place");
     if (!photosByPlace.has(placeId)) {
-      showOverview();
-      return;
+      showSavedViewOrOverview();
+      return false;
     }
 
     const photo = photosByPlace.get(placeId)[0];
     if (!photo) {
       photoStatus.textContent = "No photos with valid coordinates are available for this place.";
       photoStatus.hidden = false;
-      return;
+      return true;
     }
 
     photoStatus.hidden = true;
     map.setView([photo.latitude, photo.longitude], 14);
+    return true;
   }
 
   function showURLSelection() {
@@ -240,20 +342,25 @@
       } else {
         selectMarker(group.marker, photo);
       }
-      return;
+      return true;
     }
 
-    showSelectedPlace();
+    const selectedPlace = showSelectedPlace();
     if (photoLink?.photoID) {
       showToast(photo
         ? "This photo has no valid coordinates and cannot be shown on the map."
         : "Photo not found. The link may be outdated.");
     }
+    return selectedPlace;
   }
 
-  window.addEventListener("placechange", showURLSelection);
+  window.addEventListener("placechange", () => {
+    keepCurrentView();
+    showURLSelection();
+  });
 
   async function loadPhotos() {
+    let selectedFromURL = false;
     photoStatus.textContent = "Loading photos…";
     photoStatus.hidden = true;
     try {
@@ -300,7 +407,7 @@
       totalPhotos = photos.length;
       photosLoaded = true;
       // Read the current URL, including selections made while photos loaded.
-      showURLSelection();
+      selectedFromURL = showURLSelection();
     } catch {
       collapseGroup();
       photosLoaded = false;
@@ -311,7 +418,16 @@
       photoStatus.textContent = "Photos could not be loaded. Please reload the page to try again.";
       photoStatus.hidden = false;
     }
+    rememberView = true;
+    saveMapView();
+    if (photosLoaded && !selectedFromURL) useBrowserLocation();
   }
 
   loadPhotos();
+  // Direct links need photo data to resolve their target before any fallback.
+  // Otherwise start location lookup immediately alongside the photo request.
+  const initialURL = new URL(window.location.href);
+  if (!readPhotoLink(initialURL)?.photoID && !photosByPlace.has(initialURL.searchParams.get("place"))) {
+    useBrowserLocation();
+  }
 })();
