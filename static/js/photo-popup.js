@@ -1,43 +1,37 @@
 "use strict";
 
-function openPhotoViewer(url, description) {
-  const returnFocus = document.activeElement;
-  const dialog = document.createElement("dialog");
-  dialog.className = "photo-viewer";
-  dialog.setAttribute("aria-label", "Full-size photo");
+function createPhotoFavorite(photo, onContentChange = () => {}) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "photo-favorite-button";
+  button.setAttribute("aria-label", "Favorite photo");
+  button.disabled = !FavoriteStore.normalizeHash(photo.sha256);
 
-  const close = document.createElement("button");
-  close.type = "button";
-  close.className = "photo-viewer-close";
-  close.textContent = "×";
-  close.setAttribute("aria-label", "Close photo");
-  close.autofocus = true;
-  close.addEventListener("click", () => dialog.close());
+  const icon = document.createElement("span");
+  icon.className = "photo-favorite-icon";
+  icon.setAttribute("aria-hidden", "true");
+  const label = document.createElement("span");
+  label.textContent = button.disabled ? "Favorite unavailable" : "Favorite";
+  button.append(icon, label);
 
-  const status = document.createElement("p");
-  status.className = "photo-viewer-status";
-  status.setAttribute("role", "status");
-  status.textContent = "Loading photo…";
-  const image = document.createElement("img");
-  image.className = "photo-fullsize";
-  image.alt = description;
-  image.decoding = "async";
-  image.addEventListener("load", () => { status.hidden = true; });
-  image.addEventListener("error", () => {
-    image.hidden = true;
-    status.hidden = false;
-    status.textContent = "Photo could not be loaded. Close this view and try again.";
+  function update() {
+    const selected = favoriteStore.has(photo.sha256);
+    button.setAttribute("aria-pressed", String(selected));
+    button.title = button.disabled ? "This photo has no valid identifier."
+      : selected ? "Remove from favorites" : "Add to favorites";
+    icon.textContent = selected ? "♥" : "♡";
+  }
+
+  button.addEventListener("click", () => {
+    const saved = favoriteStore.toggle(photo.sha256);
+    update();
+    if (!saved) {
+      showToast("Favorites could not be saved in this browser. Changes will be kept only until you reload this page.");
+    }
+    onContentChange();
   });
-
-  dialog.append(close, image, status);
-  dialog.addEventListener("close", () => {
-    image.removeAttribute("src");
-    dialog.remove();
-    if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
-  }, { once: true });
-  document.body.append(dialog);
-  dialog.showModal();
-  image.src = url;
+  update();
+  return button;
 }
 
 function createPhotoPopup(photo, getZoomLevel, onContentChange) {
@@ -63,17 +57,8 @@ function createPhotoPopup(photo, getZoomLevel, onContentChange) {
   }
   content.append(time);
 
-  function imageURL(value) {
-    try {
-      const url = new URL(value);
-      return url.protocol === "https:" && !url.username && !url.password ? url.href : null;
-    } catch {
-      return null;
-    }
-  }
-
-  const previewURL = imageURL(photo.urls?.smol);
-  const largerURL = imageURL(photo.urls?.desktop);
+  const previewURL = photoImageURL(photo.urls?.smol);
+  const largerURL = photoImageURL(photo.urls?.desktop);
   const error = document.createElement("p");
   error.className = "photo-preview-error";
   error.textContent = "Preview unavailable.";
@@ -102,6 +87,7 @@ function createPhotoPopup(photo, getZoomLevel, onContentChange) {
     link.append(image);
     content.append(link);
   }
-  content.append(error, createPhotoShare(photo.id, getZoomLevel, onContentChange));
+  content.append(error, createPhotoFavorite(photo, onContentChange),
+    createPhotoShare(photo.id, getZoomLevel, onContentChange));
   return content;
 }

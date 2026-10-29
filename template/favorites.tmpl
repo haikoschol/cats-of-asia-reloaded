@@ -1,0 +1,27 @@
+{{define "title"}}Favorites | Cats of Asia{{end}}
+
+{{define "bodyClass"}}favorites-layout{{end}}
+
+{{define "pageStyles"}}
+  <link rel="stylesheet" href="/static/css/photo-popup.css">
+  <link rel="stylesheet" href="/static/css/favorites.css">
+{{end}}
+
+{{define "pageScripts"}}
+  <script src="/static/js/toast.js" defer></script>
+  <script src="/static/js/favorites-store.js" defer></script>
+  <script src="/static/js/photo-viewer.js" defer></script>
+  <script src="/static/js/favorites.js" defer></script>
+{{end}}
+
+{{define "content"}}
+  <section class="favorites-page" aria-labelledby="favorites-title">
+    <h1 id="favorites-title">Favorites</h1>
+    <p>Photos you marked in this browser. Your favorites are not shared with other browsers or devices.</p>
+    <p id="favorites-status" role="status">Loading favorites…</p>
+    <p id="favorites-empty" hidden>No favorites to display. Find some on the <a href="/">map</a>!</p>
+    <div id="toast-messages" class="toast-messages favorites-toasts" aria-live="polite" aria-relevant="additions"></div>
+    <div id="favorites-grid" class="favorites-grid" hidden></div>
+    <noscript><p>Enable JavaScript to view your favorites.</p></noscript>
+  </section>
+{{end}}

@@ -110,14 +110,17 @@ func TestHome(t *testing.T) {
 		`<link rel="stylesheet" href="/static/css/photo-popup.css">`,
 		`<script src="/static/vendor/leaflet/leaflet.js" defer></script>`,
 		`<script src="/static/js/toast.js" defer></script>`,
+		`<script src="/static/js/favorites-store.js" defer></script>`,
 		`<script src="/static/js/map.js" defer></script>`,
 		`<script src="/static/js/photo-popup.js" defer></script>`,
+		`<script src="/static/js/photo-viewer.js" defer></script>`,
 		`<script src="/static/js/photo-links.js" defer></script>`,
 		`id="photo-map"`,
 		`id="photo-status" role="status"`,
 		`data-mapbox-token="pk.example-public-map-token"`,
 		`<header class="site-header">`,
 		`Cats of Asia`,
+		`href="/favorites">Favorites</a>`,
 		`<summary id="places-toggle">Places</summary>`,
 		`<body class="map-layout">`,
 		`<h1 id="selected-place" class="selected-place visually-hidden" role="status">No place selected</h1>`,
@@ -194,6 +197,7 @@ func TestLoginLayout(t *testing.T) {
 				`<title>Log in | Cats of Asia</title>`,
 				`<meta name="viewport" content="width=device-width, initial-scale=1">`,
 				`<header class="site-header">`,
+				`href="/favorites">Favorites</a>`,
 				`<link rel="stylesheet" href="/static/css/style.css">`,
 				`<script src="/static/js/places.js" defer></script>`,
 				`Bali, Indonesia`,
@@ -210,7 +214,7 @@ func TestLoginLayout(t *testing.T) {
 			}
 			for _, asset := range []string{
 				"/static/vendor/leaflet/", "/static/js/map.js", "/static/js/photo-popup.js",
-				"/static/js/photo-links.js", "/static/css/photo-popup.css",
+				"/static/js/photo-links.js", "/static/js/photo-viewer.js", "/static/js/favorites.js", "/static/css/photo-popup.css",
 			} {
 				if strings.Contains(body, asset) {
 					t.Errorf("login page loaded homepage-only asset %s", asset)

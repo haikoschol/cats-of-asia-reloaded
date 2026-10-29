@@ -230,6 +230,25 @@ select a place and use Back/Forward. Try `zoomLevel=invalid` and an unknown UUID
 to check the notices. Check the native sharing menu on a supporting browser or
 phone; a narrow desktop viewport only checks layout, not device integration.
 
+### Photo favorites
+
+Use the heart-shaped **Favorite** button in a map popup to mark or unmark a photo.
+A filled heart shows that it is selected. Favorites require no account and
+remain in this browser's local storage under `favorites`, as a list of photo
+SHA-256 hashes compatible with the original app. They are tied to the browser,
+device, and site address; clearing site data removes them.
+
+Open **Favorites** in the navigation or visit `/favorites` to see the selection
+as image cards. Click a preview to open the existing full-size viewer, or use
+**Remove from favorites** to remove a card. An empty selection links back to the
+map. Photos missing from the current database are skipped without deleting
+their saved hashes; a failed photo request also preserves the saved selection.
+
+Invalid stored entries are ignored. Unreadable stored data produces a clear
+message on the favorites page. If saving is blocked or storage is full, changes
+remain available only for the current page visit and a notification explains
+that they cannot be retained after reload. No login is needed for either page.
+
 ### Existing PostgreSQL 17 databases
 
 PostgreSQL 18 uses a new volume, `postgres18-data`, mounted at
