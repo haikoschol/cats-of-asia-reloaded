@@ -51,6 +51,7 @@
 }
 
 .photo-share-button,
+.photo-favorite-button,
 .photo-share-manual a {
   box-sizing: border-box;
   width: 100%;
@@ -63,8 +64,32 @@
   font: inherit;
 }
 
-.photo-share-button {
+.photo-share-button,
+.photo-favorite-button {
   cursor: pointer;
+}
+
+.photo-favorite-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.photo-favorite-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.photo-favorite-button[aria-pressed="true"] {
+  border-color: #a1123b;
+  background: #fff0f4;
+  color: #a1123b;
+}
+
+.photo-favorite-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .photo-share-manual a {
@@ -76,6 +101,7 @@
 }
 
 .photo-share-button:focus-visible,
+.photo-favorite-button:focus-visible,
 .photo-share-manual a:focus-visible {
   outline: 3px solid #2276c9;
   outline-offset: 2px;

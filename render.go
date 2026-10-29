@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"html/template"
 	"log"
 	"net/http"
@@ -14,6 +15,25 @@ type templateData struct {
 	Locations         []location
 	MapboxAccessToken string
 	MapError          string
+	FavoritesPage     bool
+}
+
+func (app *application) pageData(r *http.Request) (templateData, error) {
+	data := templateData{}
+	if app.sessionManager.Exists(r.Context(), "authenticatedUserID") {
+		userID := app.sessionManager.GetInt(r.Context(), "authenticatedUserID")
+		err := app.usersDB.QueryRowContext(r.Context(), "SELECT id FROM users WHERE id = $1", userID).Scan(&userID)
+		if err == sql.ErrNoRows {
+			app.sessionManager.Remove(r.Context(), "authenticatedUserID")
+		} else if err != nil {
+			return data, err
+		} else {
+			data.Authenticated = true
+		}
+	}
+	locations, err := app.locations(r.Context())
+	data.Locations = locations
+	return data, err
 }
 
 func (app *application) renderLogin(w http.ResponseWriter, r *http.Request, status int, data templateData) {
