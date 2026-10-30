@@ -454,6 +454,34 @@ Other HTTP methods receive `405 Method Not Allowed`. Database, configuration,
 or JSON errors return a generic `500`; missing image-setting names are recorded
 only in the server log. Mapbox settings are not needed for this endpoint.
 
+### Nearby photos
+
+`GET /api/photos/nearby` is public and returns photos within a search radius,
+nearest first. It uses the same photo fields and image URLs as `/api/photos`.
+For example, to search within ten kilometres of a point in Bangkok:
+
+```bash
+curl 'http://localhost:3000/api/photos/nearby?latitude=13.75&longitude=100.5&radius_km=10&limit=10'
+```
+
+| Parameter | Allowed values | Default |
+| --- | --- | --- |
+| `latitude` | Finite number from -90 to 90, including zero | Required |
+| `longitude` | Finite number from -180 to 180, including zero | Required |
+| `radius_km` | Finite number greater than 0 and at most 100 kilometres | 10 |
+| `limit` | Whole number from 1 to 100 | 10 |
+
+Invalid, empty, duplicate, unknown, or malformed parameters return `400 Bad
+Request`. Other HTTP methods return `405 Method Not Allowed`. Database and
+configuration failures return a generic `500` response.
+
+Only photos with coordinates inside the radius are included. No matches return
+`[]`, never all photos. Equal distances are ordered by photo UUID. PostGIS uses
+the existing geography column and GiST index to filter the radius in metres,
+then calculates geographic distances for sorting. The query is read-only and
+does not require a map token or an external geocoding service. The visible
+Near Me page will be added separately.
+
 Set `DATABASE_URL` in your ignored `.env` using the content database details
 provided by the owner. Keep `USERS_DATABASE_URL` pointing to the separate users
 database; the content connection is never used for account creation or sessions.

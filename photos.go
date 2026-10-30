@@ -37,7 +37,7 @@ func (cfg config) photoURLs(id string) imageURLs {
 	}
 }
 
-func (app *application) photos(ctx context.Context) ([]photo, error) {
+func (app *application) queryPhotos(ctx context.Context, query string, args ...any) ([]photo, error) {
 	// Bound both query time and waits for a shared content connection.
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
@@ -48,13 +48,7 @@ func (app *application) photos(ctx context.Context) ([]photo, error) {
 	}
 	defer tx.Rollback()
 
-	rows, err := tx.QueryContext(ctx, `
-		SELECT p.id, p.sha256, p.timestamp,
-		       l.id, ST_Y(c.point::geometry), ST_X(c.point::geometry), l.city, l.country
-		FROM photos_photo p
-		LEFT JOIN photos_coordinates c ON c.id = p.coordinates_id
-		LEFT JOIN photos_location l ON l.id = c.location_id
-		ORDER BY p.timestamp, p.id`)
+	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -87,18 +81,28 @@ func (app *application) photos(ctx context.Context) ([]photo, error) {
 	return photos, nil
 }
 
-func (app *application) photosAPI(w http.ResponseWriter, r *http.Request) {
+func (app *application) photos(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", "GET")
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	photos, err := app.photos(r.Context())
+	photos, err := app.queryPhotos(r.Context(), `
+		SELECT p.id, p.sha256, p.timestamp,
+		       l.id, ST_Y(c.point::geometry), ST_X(c.point::geometry), l.city, l.country
+		FROM photos_photo p
+		LEFT JOIN photos_coordinates c ON c.id = p.coordinates_id
+		LEFT JOIN photos_location l ON l.id = c.location_id
+		ORDER BY p.timestamp, p.id`)
 	if err != nil {
 		log.Printf("photo query error: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+	writePhotosJSON(w, photos)
+}
+
+func writePhotosJSON(w http.ResponseWriter, photos []photo) {
 	data, err := json.Marshal(photos)
 	if err != nil {
 		log.Printf("photo JSON error: %v", err)
