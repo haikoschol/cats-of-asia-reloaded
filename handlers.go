@@ -131,6 +131,7 @@ func (app *application) routes() http.Handler {
 	mux.HandleFunc("/login", app.login)
 	mux.HandleFunc("/logout", app.logout)
 	mux.HandleFunc("/api/photos", app.photosAPI)
+	mux.HandleFunc("/api/photos/nearby", app.nearbyPhotosAPI)
 	mux.Handle("/static/", http.FileServerFS(staticFiles))
 	return app.sessionManager.LoadAndSave(mux)
 }
