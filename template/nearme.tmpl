@@ -1,0 +1,25 @@
+{{define "title"}}Near Me | Cats of Asia{{end}}
+
+{{define "bodyClass"}}nearme-layout{{end}}
+
+{{define "pageStyles"}}
+  <link rel="stylesheet" href="/static/css/favorites.css">
+  <link rel="stylesheet" href="/static/css/nearme.css">
+{{end}}
+
+{{define "pageScripts"}}
+  <script src="/static/js/photo-links.js" defer></script>
+  <script src="/static/js/photo-viewer.js" defer></script>
+  <script src="/static/js/nearme.js" defer></script>
+{{end}}
+
+{{define "content"}}
+  <section class="nearme-page" aria-labelledby="nearme-title">
+    <h1 id="nearme-title">Near Me</h1>
+    <p>Find cat photos taken within 10 km of your location.</p>
+    <p id="nearme-status" role="status">Allow location access to find nearby photos.</p>
+    <button id="nearme-retry" type="button" hidden>Try again</button>
+    <div id="nearme-grid" class="favorites-grid" aria-busy="true" hidden></div>
+    <noscript><p>Enable JavaScript and allow location access to find nearby photos.</p></noscript>
+  </section>
+{{end}}
