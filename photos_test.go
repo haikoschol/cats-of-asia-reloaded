@@ -90,7 +90,7 @@ func TestPhotosAPI(t *testing.T) {
 				}
 			}
 			mux := http.NewServeMux()
-			mux.HandleFunc("/api/photos", app.photosAPI)
+			mux.HandleFunc("/api/photos", app.photos)
 			server := httptest.NewServer(mux)
 			defer server.Close()
 			response, err := server.Client().Get(server.URL + "/api/photos")
@@ -155,8 +155,12 @@ func TestPhotosPoolWaitCancellation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	app := &application{contentDB: db}
-	if _, err := app.photos(ctx); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("wanted a deadline error while waiting for a connection, got %v", err)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/photos", nil).WithContext(ctx)
+	start := time.Now()
+	app.photos(w, r)
+	if !errors.Is(ctx.Err(), context.DeadlineExceeded) || w.Code != http.StatusInternalServerError || time.Since(start) > time.Second {
+		t.Fatalf("photo handler did not promptly honor the caller deadline: status %d, context error %v", w.Code, ctx.Err())
 	}
 }
 

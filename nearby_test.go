@@ -217,9 +217,12 @@ func TestNearbyPoolWaitCancellation(t *testing.T) {
 	// Occupy the only connection: a canceled search must not keep waiting.
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	_, err = app.nearbyPhotos(ctx, nearbySearch{latitude: 13.75, longitude: 100.5, radiusKM: 10, limit: 10})
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("expected deadline while waiting for the content connection, got %v", err)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/photos/nearby?latitude=13.75&longitude=100.5", nil).WithContext(ctx)
+	start := time.Now()
+	app.nearbyPhotos(w, r)
+	if !errors.Is(ctx.Err(), context.DeadlineExceeded) || w.Code != http.StatusInternalServerError || time.Since(start) > time.Second {
+		t.Fatalf("nearby handler did not promptly honor the caller deadline: status %d, context error %v", w.Code, ctx.Err())
 	}
 }
 

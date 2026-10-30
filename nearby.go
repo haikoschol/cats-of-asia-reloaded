@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"math"
@@ -78,11 +77,7 @@ const nearbyPhotosQuery = `
 		ORDER BY ST_Distance(c.point, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography), p.id
 		LIMIT $4`
 
-func (app *application) nearbyPhotos(ctx context.Context, search nearbySearch) ([]photo, error) {
-	return app.queryPhotos(ctx, nearbyPhotosQuery, search.longitude, search.latitude, search.radiusKM*1000, search.limit)
-}
-
-func (app *application) nearbyPhotosAPI(w http.ResponseWriter, r *http.Request) {
+func (app *application) nearbyPhotos(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", "GET")
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -98,7 +93,7 @@ func (app *application) nearbyPhotosAPI(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	photos, err := app.nearbyPhotos(r.Context(), search)
+	photos, err := app.queryPhotos(r.Context(), nearbyPhotosQuery, search.longitude, search.latitude, search.radiusKM*1000, search.limit)
 	if err != nil {
 		log.Printf("nearby photo query error: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
