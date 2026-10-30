@@ -16,6 +16,7 @@ type templateData struct {
 	MapboxAccessToken string
 	MapError          string
 	FavoritesPage     bool
+	NearMePage        bool
 }
 
 func (app *application) pageData(r *http.Request) (templateData, error) {

@@ -12,6 +12,7 @@
   </details>
 
   <a class="site-nav-link" href="/favorites"{{if .FavoritesPage}} aria-current="page"{{end}}>Favorites</a>
+  <a class="site-nav-link" href="/nearme"{{if .NearMePage}} aria-current="page"{{end}}>Near Me</a>
 
   {{if .Authenticated}}
     <form class="logout-form" action="/logout" method="post">

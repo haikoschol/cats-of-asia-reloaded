@@ -121,6 +121,7 @@ func TestHome(t *testing.T) {
 		`<header class="site-header">`,
 		`Cats of Asia`,
 		`href="/favorites">Favorites</a>`,
+		`href="/nearme">Near Me</a>`,
 		`<summary id="places-toggle">Places</summary>`,
 		`<body class="map-layout">`,
 		`<h1 id="selected-place" class="selected-place visually-hidden" role="status">No place selected</h1>`,

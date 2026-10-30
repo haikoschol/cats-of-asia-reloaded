@@ -249,6 +249,21 @@ message on the favorites page. If saving is blocked or storage is full, changes
 remain available only for the current page visit and a notification explains
 that they cannot be retained after reload. No login is needed for either page.
 
+### Nearby photos page
+
+Open **Near Me** or visit `/nearme` and allow browser location access. The page
+shows up to ten photos within 10 km, nearest first, with a preview, capture date
+in UTC, and place. Click a preview or **Show on map** to open that photo on the
+map. No login is needed. Location access requires HTTPS or localhost.
+
+The page shows progress while finding the location and loading results. Denied
+or unavailable location, a 30-second location timeout, a 15-second photo request
+timeout, server failures, and no matches each have a visible message. Use
+**Try again** or **Search again** to repeat the lookup. Coordinates are sent to
+the local site's nearby-photo endpoint and are not saved in browser storage.
+A simulated Bangkok location (latitude `13.75`, longitude `100.5`) can be used
+to verify positive results while testing from elsewhere.
+
 ### Existing PostgreSQL 17 databases
 
 PostgreSQL 18 uses a new volume, `postgres18-data`, mounted at
@@ -479,8 +494,8 @@ Only photos with coordinates inside the radius are included. No matches return
 `[]`, never all photos. Equal distances are ordered by photo UUID. PostGIS uses
 the existing geography column and GiST index to filter the radius in metres,
 then calculates geographic distances for sorting. The query is read-only and
-does not require a map token or an external geocoding service. The visible
-Near Me page will be added separately.
+does not require a map token or an external geocoding service. The `/nearme`
+page uses this endpoint with the browser's location.
 
 Set `DATABASE_URL` in your ignored `.env` using the content database details
 provided by the owner. Keep `USERS_DATABASE_URL` pointing to the separate users

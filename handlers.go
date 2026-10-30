@@ -41,6 +41,22 @@ func (app *application) favorites(w http.ResponseWriter, r *http.Request) {
 	app.renderPage(w, http.StatusOK, "favorites.tmpl", data)
 }
 
+func (app *application) nearMe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	data, err := app.pageData(r)
+	if err != nil {
+		log.Printf("page data error: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	data.NearMePage = true
+	app.renderPage(w, http.StatusOK, "nearme.tmpl", data)
+}
+
 func (app *application) logout(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
@@ -128,6 +144,7 @@ func (app *application) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", app.home)
 	mux.HandleFunc("/favorites", app.favorites)
+	mux.HandleFunc("/nearme", app.nearMe)
 	mux.HandleFunc("/login", app.login)
 	mux.HandleFunc("/logout", app.logout)
 	mux.HandleFunc("/api/photos", app.photos)

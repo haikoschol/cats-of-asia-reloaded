@@ -1,0 +1,38 @@
+.nearme-layout main {
+  place-items: start center;
+}
+
+.nearme-page {
+  width: min(72rem, 100%);
+  min-width: 0;
+}
+
+.nearme-page a {
+  color: inherit;
+}
+
+.nearme-preview-link {
+  display: block;
+}
+
+.nearme-preview-link span {
+  display: block;
+  padding: 0.75rem 0;
+}
+
+.nearme-preview-link:focus-visible,
+#nearme-retry:focus-visible {
+  outline: 3px solid #2276c9;
+  outline-offset: 2px;
+}
+
+.nearme-card p {
+  margin: 0;
+}
+
+#nearme-retry {
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  cursor: pointer;
+}
