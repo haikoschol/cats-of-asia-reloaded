@@ -174,7 +174,8 @@ func TestNearbyInvalidRequests(t *testing.T) {
 	}
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete} {
 		w := httptest.NewRecorder()
-		app.routes().ServeHTTP(w, httptest.NewRequest(method, "/api/photos/nearby?latitude=0&longitude=0", nil))
+		// Check method restrictions independently of the CSRF middleware.
+		app.nearbyPhotos(w, httptest.NewRequest(method, "/api/photos/nearby?latitude=0&longitude=0", nil))
 		if w.Code != http.StatusMethodNotAllowed || w.Header().Get("Allow") != "GET" {
 			t.Errorf("%s was not rejected with 405 and Allow: GET", method)
 		}

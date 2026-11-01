@@ -2,6 +2,7 @@
 
 {{define "content"}}
   <form class="login-form" action="/login" method="post">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
     <h1>Log in</h1>
 
     {{if .FormError}}

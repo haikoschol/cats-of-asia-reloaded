@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -56,8 +57,10 @@ func TestLoginUsesUsersDatabase(t *testing.T) {
 	}
 	app := &application{contentDB: contentDB, usersDB: usersDB, sessionManager: scs.New()}
 	handler := app.routes()
-	request := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("username=role-test-user&password=test-password"))
-	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	token, cookies := csrfTestForm(t, handler, "/login", nil)
+	request := csrfTestPost("/login", url.Values{
+		"username": {"role-test-user"}, "password": {"test-password"}, "csrf_token": {token},
+	}, cookies)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusSeeOther {
@@ -72,5 +75,30 @@ func TestLoginUsesUsersDatabase(t *testing.T) {
 	if homeResponse.Code != http.StatusOK || !strings.Contains(homeResponse.Body.String(), "Log out") ||
 		!strings.Contains(homeResponse.Body.String(), "Content place, Test country") {
 		t.Fatal("homepage did not validate the user through usersDB and read places through contentDB")
+	}
+
+	loginRequest := httptest.NewRequest(http.MethodGet, "/login", nil)
+	for _, cookie := range response.Result().Cookies() {
+		loginRequest.AddCookie(cookie)
+	}
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, loginRequest)
+	if loginResponse.Code != http.StatusSeeOther || loginResponse.Header().Get("Location") != "/" {
+		t.Fatal("login did not redirect the existing user after checking usersDB")
+	}
+
+	if _, err := usersDB.Exec("DELETE FROM users WHERE username = $1", "role-test-user"); err != nil {
+		t.Fatal(err)
+	}
+	loginResponse = httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, loginRequest)
+	if loginResponse.Code != http.StatusOK || !strings.Contains(loginResponse.Body.String(), `class="login-form"`) {
+		t.Fatal("a deleted user's old session prevented a new login")
+	}
+
+	homeResponse = httptest.NewRecorder()
+	handler.ServeHTTP(homeResponse, homeRequest)
+	if homeResponse.Code != http.StatusOK || strings.Contains(homeResponse.Body.String(), "Log out") {
+		t.Fatal("a deleted user's old session remained authenticated on a later request")
 	}
 }

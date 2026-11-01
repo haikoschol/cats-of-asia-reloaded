@@ -51,7 +51,8 @@ func TestFavoritesPage(t *testing.T) {
 	}
 
 	w = httptest.NewRecorder()
-	handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/favorites", nil))
+	// Check the handler's method restriction independently of CSRF protection.
+	app.favorites(w, httptest.NewRequest(http.MethodPost, "/favorites", nil))
 	if w.Code != http.StatusMethodNotAllowed || w.Header().Get("Allow") != "GET, HEAD" {
 		t.Error("favorites page accepted a write method")
 	}

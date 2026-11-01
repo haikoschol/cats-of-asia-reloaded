@@ -16,6 +16,7 @@
 
   {{if .Authenticated}}
     <form class="logout-form" action="/logout" method="post">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       <button class="logout" type="submit">Log out</button>
     </form>
   {{end}}

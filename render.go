@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"database/sql"
 	"html/template"
 	"log"
 	"net/http"
@@ -12,6 +11,7 @@ type templateData struct {
 	Username          string
 	Authenticated     bool
 	FormError         string
+	CSRFToken         string
 	Locations         []location
 	MapboxAccessToken string
 	MapError          string
@@ -21,16 +21,13 @@ type templateData struct {
 
 func (app *application) pageData(r *http.Request) (templateData, error) {
 	data := templateData{}
-	if app.sessionManager.Exists(r.Context(), "authenticatedUserID") {
-		userID := app.sessionManager.GetInt(r.Context(), "authenticatedUserID")
-		err := app.usersDB.QueryRowContext(r.Context(), "SELECT id FROM users WHERE id = $1", userID).Scan(&userID)
-		if err == sql.ErrNoRows {
-			app.sessionManager.Remove(r.Context(), "authenticatedUserID")
-		} else if err != nil {
-			return data, err
-		} else {
-			data.Authenticated = true
-		}
+	userID, err := app.authenticatedUserID(r.Context())
+	if err != nil {
+		return data, err
+	}
+	data.Authenticated = userID != 0
+	if data.Authenticated {
+		data.CSRFToken = app.csrfToken(r.Context())
 	}
 	locations, err := app.locations(r.Context())
 	data.Locations = locations
@@ -45,6 +42,7 @@ func (app *application) renderLogin(w http.ResponseWriter, r *http.Request, stat
 		return
 	}
 	data.Locations = locations
+	data.CSRFToken = app.csrfToken(r.Context())
 	app.renderPage(w, status, "login.tmpl", data)
 }
 
@@ -64,6 +62,9 @@ func (app *application) renderPage(w http.ResponseWriter, status int, page strin
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if data.CSRFToken != "" {
+		w.Header().Set("Cache-Control", "no-store")
+	}
 	w.WriteHeader(status)
 	if _, err := buf.WriteTo(w); err != nil {
 		log.Printf("template response error: %v", err)

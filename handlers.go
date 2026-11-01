@@ -74,7 +74,13 @@ func (app *application) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *application) login(w http.ResponseWriter, r *http.Request) {
-	if app.sessionManager.Exists(r.Context(), "authenticatedUserID") {
+	userID, err := app.authenticatedUserID(r.Context())
+	if err != nil {
+		log.Printf("authentication check error: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	if userID != 0 {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
@@ -132,6 +138,7 @@ func (app *application) login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		app.sessionManager.Put(r.Context(), "authenticatedUserID", userID)
+		app.sessionManager.Remove(r.Context(), "csrfToken")
 
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	default:
@@ -146,9 +153,9 @@ func (app *application) routes() http.Handler {
 	mux.HandleFunc("/favorites", app.favorites)
 	mux.HandleFunc("/nearme", app.nearMe)
 	mux.HandleFunc("/login", app.login)
-	mux.HandleFunc("/logout", app.logout)
+	mux.HandleFunc("/logout", app.requireLogin(app.logout))
 	mux.HandleFunc("/api/photos", app.photos)
 	mux.HandleFunc("/api/photos/nearby", app.nearbyPhotos)
 	mux.Handle("/static/", http.FileServerFS(staticFiles))
-	return app.sessionManager.LoadAndSave(mux)
+	return app.sessionManager.LoadAndSave(app.protectCSRF(mux))
 }
