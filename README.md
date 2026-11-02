@@ -471,6 +471,30 @@ unsafe requests without a valid token are rejected first with `403`. Database, c
 or JSON errors return a generic `500`; missing image-setting names are recorded
 only in the server log. Mapbox settings are not needed for this endpoint.
 
+### Check for an existing photo
+
+`GET /api/photos/exists?sha256=<hash>` requires login and returns
+`{"exists":true}` or `{"exists":false}`. The request must contain exactly one
+`sha256` parameter with 64 hexadecimal characters. Uppercase input is normalized
+to the lowercase hashes stored by the uploader. Invalid, duplicate, unknown, or
+malformed parameters return `400` before any photo lookup. Anonymous or deleted
+users receive `401` JSON; photo database failures return a generic `500`, never
+`exists:false`. Unsupported methods return `405` after the shared CSRF check.
+
+To check this manually while the app is running:
+
+1. Sign in at `/login`.
+2. Open `/api/photos` and copy one photo's `sha256` value.
+3. Open `/api/photos/exists?sha256=<copied hash>` in the same browser; expect
+   `{"exists":true}`. An unknown valid hash returns `{"exists":false}`.
+4. Try `/api/photos/exists?sha256=abc`; expect `400`.
+5. Log out using the normal button, then revisit the hash check; expect `401`.
+
+This GET request needs no CSRF token. The query reads only the
+content connection and needs no map or image settings. The existing unique
+constraint on `photos_photo.sha256` remains the final duplicate safeguard;
+the upload UI and browser-side file hashing will use this check later.
+
 ### Nearby photos
 
 `GET /api/photos/nearby` is public and returns photos within a search radius,
@@ -615,6 +639,11 @@ A pool-wait check verifies that a caller deadline also cancels photo reads while
 the content database's only connection is occupied.
 Temporary tables exist only on their test connection and are removed when it
 closes; production is not used.
+
+Hash-check tests cover known/new hashes, invalid inputs before any photo query,
+separate user/content connections, denied access, and database errors. An HTTP
+test uses cookies and PostgreSQL sessions for login, hash checks, logout, and
+rejection of a replayed session cookie. A pool-wait test checks cancellation.
 
 Login tests cover correct, incorrect, and missing credentials, retrying after a
 wrong password, homepage redirects, and visiting login while already signed in.
