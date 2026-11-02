@@ -14,14 +14,15 @@ import (
 )
 
 type config struct {
-	DatabaseURL       string `env:"DATABASE_URL"`
-	UsersDatabaseURL  string `env:"USERS_DATABASE_URL"`
-	ImageDomain       string `env:"CLOUDFLARE_IMAGES_DOMAIN"`
-	ImageAccountHash  string `env:"CLOUDFLARE_IMAGES_ACCOUNT_HASH"`
-	MapboxAccessToken string `env:"MAPBOX_ACCESS_TOKEN"`
-	PostgresUser      string `env:"POSTGRES_USER"`
-	PostgresPassword  string `env:"POSTGRES_PASSWORD"`
-	PostgresDB        string `env:"POSTGRES_DB"`
+	DatabaseURL         string `env:"DATABASE_URL"`
+	UsersDatabaseURL    string `env:"USERS_DATABASE_URL"`
+	SessionCookieSecure bool   `env:"SESSION_COOKIE_SECURE"`
+	ImageDomain         string `env:"CLOUDFLARE_IMAGES_DOMAIN"`
+	ImageAccountHash    string `env:"CLOUDFLARE_IMAGES_ACCOUNT_HASH"`
+	MapboxAccessToken   string `env:"MAPBOX_ACCESS_TOKEN"`
+	PostgresUser        string `env:"POSTGRES_USER"`
+	PostgresPassword    string `env:"POSTGRES_PASSWORD"`
+	PostgresDB          string `env:"POSTGRES_DB"`
 }
 
 // Read .env as data, without changing the process environment. Existing

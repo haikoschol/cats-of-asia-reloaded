@@ -69,7 +69,17 @@ func TestNearMePage(t *testing.T) {
 		t.Fatal("HEAD did not return a successful response without a body")
 	}
 
-	response, err = server.Client().Post(server.URL+"/nearme", "text/plain", nil)
+	// A valid CSRF token lets this request reach the method restriction.
+	token, cookies := csrfTestForm(t, app.routes(), "/login", nil)
+	request, err := http.NewRequest(http.MethodPost, server.URL+"/nearme", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("X-CSRF-Token", token)
+	for _, cookie := range cookies {
+		request.AddCookie(cookie)
+	}
+	response, err = server.Client().Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}

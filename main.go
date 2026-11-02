@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/alexedwards/scs/postgresstore"
 	"github.com/alexedwards/scs/v2"
@@ -75,9 +74,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	sessionManager := scs.New()
+	sessionManager := newSessionManager(cfg)
 	sessionManager.Store = postgresstore.New(usersDB)
-	sessionManager.Lifetime = 12 * time.Hour
 
 	app := &application{
 		config:         cfg,

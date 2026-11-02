@@ -187,6 +187,11 @@ func TestLoginLayout(t *testing.T) {
 			r := httptest.NewRequest(tt.method, "/login", strings.NewReader(tt.form))
 			if tt.method == http.MethodPost {
 				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				token, cookies := csrfTestForm(t, handler, "/login", nil)
+				r.Header.Set("X-CSRF-Token", token)
+				for _, cookie := range cookies {
+					r.AddCookie(cookie)
+				}
 			}
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, r)
@@ -204,6 +209,7 @@ func TestLoginLayout(t *testing.T) {
 				`Bali, Indonesia`,
 				`<a class="place-option" href="/?place=`,
 				`<form class="login-form" action="/login" method="post">`,
+				`type="hidden" name="csrf_token"`,
 				`type="password"`,
 			} {
 				if !strings.Contains(body, content) {

@@ -370,6 +370,7 @@ environment, not in `.env.example`.
 | --- | --- | --- |
 | `DATABASE_URL` | Read-only content connection for photos, coordinates, and locations; server-only | Required explicitly; use TLS for a remote source |
 | `USERS_DATABASE_URL` | Read/write connection for users and sessions; server-only | Required explicitly; normally the local Docker database |
+| `SESSION_COOKIE_SECURE` | Send the session cookie over HTTPS only | Defaults to `false` for local HTTP; set `true` for HTTPS production |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Local Docker database and pgconsole credentials; server-only | Required by the development and test scripts |
 | `CLOUDFLARE_IMAGES_DOMAIN` | Public image-delivery hostname, without a scheme or path | Required when the photo API returns photos |
 | `CLOUDFLARE_IMAGES_ACCOUNT_HASH` | Public account identifier used in image URLs | Required when the photo API returns photos |
@@ -465,7 +466,8 @@ centrally constructed Cloudflare base URL and the photo UUID.
 
 The query runs in a read-only transaction and does not import, create, or change
 photo records. Filenames, raw EXIF metadata, and credentials are not returned.
-Other HTTP methods receive `405 Method Not Allowed`. Database, configuration,
+Other HTTP methods receive `405 Method Not Allowed` after the shared CSRF check;
+unsafe requests without a valid token are rejected first with `403`. Database, configuration,
 or JSON errors return a generic `500`; missing image-setting names are recorded
 only in the server log. Mapbox settings are not needed for this endpoint.
 
@@ -487,7 +489,8 @@ curl 'http://localhost:3000/api/photos/nearby?latitude=13.75&longitude=100.5&rad
 | `limit` | Whole number from 1 to 100 | 10 |
 
 Invalid, empty, duplicate, unknown, or malformed parameters return `400 Bad
-Request`. Other HTTP methods return `405 Method Not Allowed`. Database and
+Request`. Other HTTP methods return `405 Method Not Allowed` after the shared
+CSRF check; unsafe requests without a valid token receive `403` first. Database and
 configuration failures return a generic `500` response.
 
 Only photos with coordinates inside the radius are included. No matches return
@@ -538,6 +541,45 @@ Start the web application with `./scripts/run.sh`, then open
 successful login redirects to the homepage. Use
 the **Log out** button in the top-right corner to end the session.
 
+For local `http://localhost:3000`, leave `SESSION_COOKIE_SECURE` unset or set it
+to `false`. For HTTPS production, set `SESSION_COOKIE_SECURE=true` in the service
+environment (currently `/etc/catsofasia/app.env`) and restart the app when deploying
+this version. This also applies when Caddy terminates HTTPS and forwards to Go
+over local HTTP. The setting is explicit; request headers such as
+`X-Forwarded-Proto` do not change the cookie policy. Invalid boolean values stop
+startup with a generic configuration error.
+
+Session cookies always use `HttpOnly` (unavailable to JavaScript), `SameSite=Lax`,
+and path `/`, with no Domain attribute, so sibling subdomains do not share the
+cookie. Sessions retain their existing 12-hour lifetime. On logout, the cookie
+is expired using the same attributes. After enabling Secure on an existing
+deployment, sign out and back in to replace any older cookie.
+
+Page headers and login redirects share a user check against `USERS_DATABASE_URL`.
+Deleted users lose their authenticated status even if their session has not expired.
+If the check fails because of a database error, the request returns an error
+without discarding the session.
+
+Register protected browser handlers with `app.requireLogin(handler)` and JSON
+handlers with `app.requireLoginJSON(handler)`, inside the existing session
+`LoadAndSave` middleware. Anonymous browser requests redirect to `/login`;
+anonymous API requests return `401` with `{"error":"Unauthorized"}`. Database
+check failures return `500` without executing the handler. Protected responses
+use `Cache-Control: no-store`. Logout uses the browser guard; photo browsing,
+Favorites, Near Me, and the photo APIs remain public.
+
+CSRF protection wraps all routes inside the session middleware. Every request
+except GET, HEAD, and OPTIONS requires a session-bound token in the URL-encoded
+`csrf_token` form field or the `X-CSRF-Token` header. JSON and multipart upload
+clients use the header; URL query tokens are not accepted. Login and logout
+forms include the token automatically. Go's `http.CrossOriginProtection` also
+rejects cross-origin writes using browser fetch metadata or Origin headers.
+Missing, incorrect, or expired tokens return `403` before executing the action;
+paths under `/api/` receive `{"error":"Forbidden"}` as JSON. Reload the page to
+obtain a current form. Successful login rotates the CSRF token, and logout
+destroys it with the session. Pages containing tokens are not cached. Future
+write routes registered in `routes()` inherit this protection automatically.
+
 ## Run tests
 
 Run the automated homepage test with:
@@ -573,6 +615,13 @@ A pool-wait check verifies that a caller deadline also cancels photo reads while
 the content database's only connection is occupied.
 Temporary tables exist only on their test connection and are removed when it
 closes; production is not used.
+
+Login tests cover correct, incorrect, and missing credentials, retrying after a
+wrong password, homepage redirects, and visiting login while already signed in.
+They also use the PostgreSQL session store to verify that expired or revoked
+sessions and deleted users lose access. Other authentication tests cover logout,
+CSRF rejection and token rotation, HTML/JSON access checks, database errors, and
+cookie-based login/logout over HTTP and HTTPS, including proxy cookie settings.
 
 Configuration tests set their own example environment values and check missing
 settings, `.env` loading, environment precedence, operation without a file, and

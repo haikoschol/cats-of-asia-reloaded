@@ -155,6 +155,7 @@ func clearConfigEnvironment(t *testing.T) {
 	for _, name := range []string{
 		"DATABASE_URL", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB",
 		"USERS_DATABASE_URL",
+		"SESSION_COOKIE_SECURE",
 		"CLOUDFLARE_IMAGES_DOMAIN", "CLOUDFLARE_IMAGES_ACCOUNT_HASH", "MAPBOX_ACCESS_TOKEN",
 	} {
 		// t.Setenv records the original value so cleanup restores it after Unsetenv.
@@ -247,6 +248,35 @@ USERS_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:54
 	}
 	if cfg.UsersDatabaseURL != "postgres://sample:sample-password@localhost:5432/cats_sample?sslmode=disable" {
 		t.Fatal("explicit USERS_DATABASE_URL interpolation stopped working")
+	}
+}
+
+func TestSessionCookieConfiguration(t *testing.T) {
+	clearConfigEnvironment(t)
+	t.Setenv("DATABASE_URL", "postgres://reader:example@content.example/photos")
+	t.Setenv("USERS_DATABASE_URL", "postgres://writer:example@localhost/users")
+	path := filepath.Join(t.TempDir(), ".env")
+	cfg, err := loadConfigFile(path)
+	if err != nil || cfg.SessionCookieSecure {
+		t.Fatalf("local HTTP default must work without a setting: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("SESSION_COOKIE_SECURE=true\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = loadConfigFile(path)
+	if err != nil || !cfg.SessionCookieSecure {
+		t.Fatalf("HTTPS setting was not loaded from .env: %v", err)
+	}
+	for _, value := range []string{"false", "true"} {
+		t.Setenv("SESSION_COOKIE_SECURE", value)
+		cfg, err = loadConfigFile(path)
+		if err != nil || cfg.SessionCookieSecure != (value == "true") {
+			t.Fatalf("explicit cookie setting did not override .env: %v", err)
+		}
+	}
+	t.Setenv("SESSION_COOKIE_SECURE", "invalid-private-example")
+	if _, err := loadConfigFile(path); err == nil || err.Error() != "cannot parse environment configuration" {
+		t.Fatal("invalid cookie configuration did not produce a generic error")
 	}
 }
 
