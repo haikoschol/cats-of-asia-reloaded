@@ -155,6 +155,7 @@ func (app *application) routes() http.Handler {
 	mux.HandleFunc("/login", app.login)
 	mux.HandleFunc("/logout", app.requireLogin(app.logout))
 	mux.HandleFunc("/api/photos", app.photos)
+	mux.HandleFunc("/api/photos/exists", app.requireLoginJSON(app.photoExists))
 	mux.HandleFunc("/api/photos/nearby", app.nearbyPhotos)
 	mux.Handle("/static/", http.FileServerFS(staticFiles))
 	return app.sessionManager.LoadAndSave(app.protectCSRF(mux))
