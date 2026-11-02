@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+node scripts/upload-metadata.test.cjs
+
 echo "Building the application..."
 go build .
 

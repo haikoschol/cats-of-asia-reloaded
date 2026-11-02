@@ -1,0 +1,136 @@
+.upload-layout main {
+  place-items: start center;
+}
+
+.upload-page {
+  width: min(72rem, 100%);
+  min-width: 0;
+}
+
+.upload-controls {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 36rem;
+}
+
+.upload-controls input,
+.upload-controls button,
+.upload-retry,
+.upload-remove {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 0.5rem;
+  font: inherit;
+}
+
+.upload-controls input {
+  min-width: 0;
+  width: 100%;
+}
+
+.upload-controls p {
+  margin: 0;
+}
+
+.upload-controls button {
+  justify-self: start;
+}
+
+.upload-controls button,
+.upload-retry,
+.upload-remove {
+  border: 1px solid #777;
+  border-radius: 4px;
+  background: #fff;
+  color: #111;
+  cursor: pointer;
+}
+
+.upload-controls button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.upload-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.upload-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid #008f11;
+  border-radius: 4px;
+  background: #fff;
+  color: #111;
+  overflow-wrap: anywhere;
+}
+
+.upload-card h2,
+.upload-card p {
+  margin: 0;
+}
+
+.upload-card h2 {
+  font-size: 1rem;
+}
+
+.upload-preview {
+  display: block;
+  width: 100%;
+  height: 16rem;
+  object-fit: contain;
+  background: #eee;
+}
+
+.upload-preview[hidden] {
+  display: none;
+}
+
+.upload-file-status.error {
+  color: #a00;
+}
+
+.upload-file-status.duplicate {
+  color: #805500;
+  font-weight: bold;
+}
+
+.upload-hash {
+  font-size: 0.8rem;
+}
+
+.upload-metadata h3,
+.upload-metadata dl {
+  margin: 0 0 0.75rem;
+}
+
+.upload-metadata h3 {
+  font-size: 1rem;
+}
+
+.upload-metadata dt {
+  font-weight: bold;
+}
+
+.upload-metadata dd {
+  margin: 0 0 0.5rem;
+}
+
+.upload-remove {
+  margin-top: auto;
+}
+
+.upload-controls input:focus-visible,
+.upload-controls button:focus-visible,
+.upload-retry:focus-visible,
+.upload-remove:focus-visible {
+  outline: 3px solid #2276c9;
+  outline-offset: 2px;
+}
