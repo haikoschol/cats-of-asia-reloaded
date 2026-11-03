@@ -152,6 +152,7 @@ func (app *application) routes() http.Handler {
 	mux.HandleFunc("/", app.home)
 	mux.HandleFunc("/favorites", app.favorites)
 	mux.HandleFunc("/nearme", app.nearMe)
+	mux.HandleFunc("/upload", app.requireLogin(app.upload))
 	mux.HandleFunc("/login", app.login)
 	mux.HandleFunc("/logout", app.requireLogin(app.logout))
 	mux.HandleFunc("/api/photos", app.photos)

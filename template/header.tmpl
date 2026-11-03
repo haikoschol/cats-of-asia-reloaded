@@ -15,6 +15,7 @@
   <a class="site-nav-link" href="/nearme"{{if .NearMePage}} aria-current="page"{{end}}>Near Me</a>
 
   {{if .Authenticated}}
+    <a class="site-nav-link" href="/upload"{{if .UploadPage}} aria-current="page"{{end}}>Upload</a>
     <form class="logout-form" action="/logout" method="post">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       <button class="logout" type="submit">Log out</button>

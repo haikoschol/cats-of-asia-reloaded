@@ -6,6 +6,7 @@ you select a place and displays geolocated photos as red circles on a map.
 ## Prerequisites
 
 - Go 1.27 or later
+- Node.js 22 or later (tests only; no npm install required)
 - Docker with Docker Compose v2 supporting `up --wait --wait-timeout`
 
 The database uses PostgreSQL 18 with PostGIS 3.6. Its image is AMD64-only, so
@@ -263,6 +264,11 @@ timeout, server failures, and no matches each have a visible message. Use
 the local site's nearby-photo endpoint and are not saved in browser storage.
 A simulated Bangkok location (latitude `13.75`, longitude `100.5`) can be used
 to verify positive results while testing from elsewhere.
+
+### Upload previews
+
+Signed-in users can open **Upload** to select JPEGs and preview them locally.
+See [Upload preparation](docs/upload.md) for the current behavior and checks.
 
 ### Existing PostgreSQL 17 databases
 

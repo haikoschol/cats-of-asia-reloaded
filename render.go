@@ -17,6 +17,7 @@ type templateData struct {
 	MapError          string
 	FavoritesPage     bool
 	NearMePage        bool
+	UploadPage        bool
 }
 
 func (app *application) pageData(r *http.Request) (templateData, error) {
