@@ -44,7 +44,7 @@ With tracking disabled, the script is omitted entirely.
 ## Production rollout and verification
 
 Prepared on 2026-11-03: `reloaded.catsof.asia` was added as a separate site in
-the existing Plausible instance with reporting timezone `Europe/Berlin`.
+the existing Plausible instance with reporting timezone `Asia/Bangkok`.
 The original `catsof.asia` site remains present. The app on production was
 still running `coa-68e47bc`; no application deployment or tracking activation
 was performed as part of this preparation.
