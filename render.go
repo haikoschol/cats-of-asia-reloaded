@@ -8,16 +8,19 @@ import (
 )
 
 type templateData struct {
-	Username          string
-	Authenticated     bool
-	FormError         string
-	CSRFToken         string
-	Locations         []location
-	MapboxAccessToken string
-	MapError          string
-	FavoritesPage     bool
-	NearMePage        bool
-	UploadPage        bool
+	Username           string
+	Authenticated      bool
+	FormError          string
+	CSRFToken          string
+	Locations          []location
+	MapboxAccessToken  string
+	MapError           string
+	FavoritesPage      bool
+	NearMePage         bool
+	UploadPage         bool
+	PlausibleEnabled   bool
+	PlausibleDomain    string
+	PlausibleScriptURL string
 }
 
 func (app *application) pageData(r *http.Request) (templateData, error) {
@@ -48,6 +51,12 @@ func (app *application) renderLogin(w http.ResponseWriter, r *http.Request, stat
 }
 
 func (app *application) renderPage(w http.ResponseWriter, status int, page string, data templateData) {
+	// Apply tracking centrally so every page, including login errors, uses the
+	// same settings without exposing unrelated application configuration.
+	data.PlausibleEnabled = app.config.PlausibleEnabled
+	data.PlausibleDomain = app.config.PlausibleDomain
+	data.PlausibleScriptURL = app.config.PlausibleScriptURL
+
 	// Parse one page at a time so its blocks cannot overwrite another page's.
 	tmpl, err := template.ParseFS(templateFiles, "template/base.tmpl", "template/header.tmpl", "template/"+page)
 	if err != nil {

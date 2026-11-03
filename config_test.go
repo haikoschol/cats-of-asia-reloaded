@@ -156,6 +156,7 @@ func clearConfigEnvironment(t *testing.T) {
 		"DATABASE_URL", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB",
 		"USERS_DATABASE_URL",
 		"SESSION_COOKIE_SECURE",
+		"PLAUSIBLE_ENABLED", "PLAUSIBLE_DOMAIN", "PLAUSIBLE_SCRIPT_URL",
 		"CLOUDFLARE_IMAGES_DOMAIN", "CLOUDFLARE_IMAGES_ACCOUNT_HASH", "MAPBOX_ACCESS_TOKEN",
 	} {
 		// t.Setenv records the original value so cleanup restores it after Unsetenv.

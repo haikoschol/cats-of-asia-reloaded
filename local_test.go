@@ -84,6 +84,7 @@ func TestRunTestsUsesIsolatedConnection(t *testing.T) {
 [ "$DATABASE_URL" = "$EXPECTED_TEST_DATABASE_URL" ] || exit 1
 [ "$USERS_DATABASE_URL" = "$EXPECTED_TEST_DATABASE_URL" ] || exit 1
 [ "$CATS_TEST_DATABASE_URL" = "$EXPECTED_TEST_DATABASE_URL" ] || exit 1
+[ "$PLAUSIBLE_ENABLED" = false ] || exit 1
 [ "$1" = test ] && [ "$2" = -count=1 ] && [ "$3" = ./... ]
 `
 	if err := os.WriteFile(filepath.Join(dir, "go"), []byte(program), 0o700); err != nil {
@@ -92,6 +93,7 @@ func TestRunTestsUsesIsolatedConnection(t *testing.T) {
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("DATABASE_URL", "postgres://example:fake-private-password@remote.example/cats")
 	t.Setenv("USERS_DATABASE_URL", "postgres://reader:fake-private-password@remote.example/photos")
+	t.Setenv("PLAUSIBLE_ENABLED", "true")
 	t.Setenv("EXPECTED_TEST_DATABASE_URL", "postgres://sample:sample-password@localhost:5433/cats_sample?sslmode=disable")
 	cfg := config{PostgresUser: "sample", PostgresPassword: "sample-password", PostgresDB: "cats_sample"}
 	if err := runTests(cfg, "5433"); err != nil {
@@ -102,5 +104,8 @@ func TestRunTestsUsesIsolatedConnection(t *testing.T) {
 	}
 	if os.Getenv("USERS_DATABASE_URL") != "postgres://reader:fake-private-password@remote.example/photos" {
 		t.Fatal("test runner overwrote its parent's users connection")
+	}
+	if os.Getenv("PLAUSIBLE_ENABLED") != "true" {
+		t.Fatal("test runner overwrote its parent's tracking setting")
 	}
 }

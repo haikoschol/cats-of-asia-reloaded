@@ -17,6 +17,9 @@ type config struct {
 	DatabaseURL         string `env:"DATABASE_URL"`
 	UsersDatabaseURL    string `env:"USERS_DATABASE_URL"`
 	SessionCookieSecure bool   `env:"SESSION_COOKIE_SECURE"`
+	PlausibleEnabled    bool   `env:"PLAUSIBLE_ENABLED"`
+	PlausibleDomain     string `env:"PLAUSIBLE_DOMAIN"`
+	PlausibleScriptURL  string `env:"PLAUSIBLE_SCRIPT_URL"`
 	ImageDomain         string `env:"CLOUDFLARE_IMAGES_DOMAIN"`
 	ImageAccountHash    string `env:"CLOUDFLARE_IMAGES_ACCOUNT_HASH"`
 	MapboxAccessToken   string `env:"MAPBOX_ACCESS_TOKEN"`
@@ -50,6 +53,8 @@ func loadConfigFile(path string) (config, error) {
 	cfg.ImageDomain = strings.TrimSpace(cfg.ImageDomain)
 	cfg.ImageAccountHash = strings.TrimSpace(cfg.ImageAccountHash)
 	cfg.MapboxAccessToken = strings.TrimSpace(cfg.MapboxAccessToken)
+	cfg.PlausibleDomain = strings.ToLower(strings.TrimSpace(cfg.PlausibleDomain))
+	cfg.PlausibleScriptURL = strings.TrimSpace(cfg.PlausibleScriptURL)
 
 	if cfg.DatabaseURL == "" {
 		return config{}, fmt.Errorf("DATABASE_URL is not set")
@@ -57,7 +62,48 @@ func loadConfigFile(path string) (config, error) {
 	if cfg.UsersDatabaseURL == "" {
 		return config{}, fmt.Errorf("USERS_DATABASE_URL is not set")
 	}
+	if err := cfg.validatePlausible(); err != nil {
+		return config{}, err
+	}
 	return cfg, nil
+}
+
+func (cfg config) validatePlausible() error {
+	if !cfg.PlausibleEnabled {
+		return nil
+	}
+	if !validPlausibleHostname(cfg.PlausibleDomain) {
+		return fmt.Errorf("PLAUSIBLE_DOMAIN must be a hostname without a scheme, port or path")
+	}
+	scriptURL, err := url.Parse(cfg.PlausibleScriptURL)
+	if err != nil || scriptURL.Scheme != "https" || scriptURL.User != nil ||
+		scriptURL.Fragment != "" || !validPlausibleHostname(scriptURL.Hostname()) {
+		return fmt.Errorf("PLAUSIBLE_SCRIPT_URL must be an absolute HTTPS URL without credentials or a fragment")
+	}
+	if port := scriptURL.Port(); port != "" {
+		number, err := strconv.Atoi(port)
+		if err != nil || number < 1 || number > 65535 {
+			return fmt.Errorf("PLAUSIBLE_SCRIPT_URL has an invalid port")
+		}
+	}
+	return nil
+}
+
+func validPlausibleHostname(host string) bool {
+	if len(host) == 0 || len(host) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, char := range label {
+			if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '-') {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (cfg config) validateImages() error {

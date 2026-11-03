@@ -52,6 +52,7 @@ func runTests(cfg config, port string) error {
 	for _, assignment := range os.Environ() {
 		if !strings.HasPrefix(assignment, "DATABASE_URL=") &&
 			!strings.HasPrefix(assignment, "USERS_DATABASE_URL=") &&
+			!strings.HasPrefix(assignment, "PLAUSIBLE_ENABLED=") &&
 			!strings.HasPrefix(assignment, "CATS_TEST_DATABASE_URL=") {
 			command.Env = append(command.Env, assignment)
 		}
@@ -59,6 +60,7 @@ func runTests(cfg config, port string) error {
 	command.Env = append(command.Env, "DATABASE_URL="+databaseURL)
 	command.Env = append(command.Env, "USERS_DATABASE_URL="+databaseURL)
 	command.Env = append(command.Env, "CATS_TEST_DATABASE_URL="+databaseURL)
+	command.Env = append(command.Env, "PLAUSIBLE_ENABLED=false")
 	command.Stdin = os.Stdin
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
