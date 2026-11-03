@@ -101,6 +101,11 @@ The homepage additionally loads the pinned Leaflet 1.9.4 JavaScript and CSS from
 BSD-2-Clause license, asset provenance, and integrity values are retained in
 [the vendored Leaflet directory](static/vendor/leaflet/README.md).
 
+### Plausible analytics
+
+Optional tracking settings are described in [Analytics configuration](docs/analytics.md).
+Tracking is disabled by default and, when enabled, loads once in the shared layout.
+
 ### Homepage map
 
 Set `MAPBOX_ACCESS_TOKEN` in your ignored `.env` to a working **public** Mapbox

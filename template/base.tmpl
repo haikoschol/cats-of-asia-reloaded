@@ -11,6 +11,9 @@
   <link rel="stylesheet" href="/static/css/style.css">
   <script src="/static/js/places.js" defer></script>
   {{block "pageScripts" .}}{{end}}
+  {{if .PlausibleEnabled}}
+  <script async data-domain="{{.PlausibleDomain}}" src="{{.PlausibleScriptURL}}"></script>
+  {{end}}
 </head>
 
 <body class="{{block "bodyClass" .}}{{end}}">
