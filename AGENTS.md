@@ -1,11 +1,11 @@
-# Working Rules for Cats of Asia Infra
+# Working Rules for Cats of Asia Reloaded
 
 ## At the Start of Every Chat
 
 1. Check the current branch and `git status`. Do not switch branches or clean up
    anything without being asked.
-2. Use the repository, Git history, and relevant documentation to establish the
-   current project state.
+2. Use the repository, Git history, relevant GitHub issues and PRs, and documentation
+   to establish the current project state.
 3. Read the relevant GitHub issue and existing PR comments when the request refers
    to them. Check the current status in the CatsOfAsia project when the next task
    still needs to be clarified; do not start a ticket on your own.
@@ -16,9 +16,9 @@
   request. Do not add systems, abstractions, or features for hypothetical future use.
 - Photo data is not highly critical; downtime during manual recovery is acceptable.
   Still protect credentials and user accounts.
-- Prefer Go and make sensible use of existing standard tools such as `pg_dump`,
-  Bash, and OpenTofu. Discuss new languages or major architectural changes first.
-  Do not rewrite older Python tools as a side task.
+- Prefer Go and the existing architecture. Reuse the existing JavaScript for the
+  browser UI. Discuss new languages, build tools, or major architectural changes
+  first. Do not use Python without asking before.
 - Respond in the user's language, clearly and without unnecessary jargon.
   Explain things to Peter in German. Keep README files short and practical.
 - For requests to "just explain/check," do not modify files or services. Carry out
@@ -26,20 +26,26 @@
 - Only commit, push, merge, or post GitHub messages when explicitly instructed.
   Do not ask again for each substep when approval has already been given.
 
-## Infrastructure and Verification
+## Development and Verification
 
-- Make production changes, deployments, and `tofu apply` runs only within the
-  requested scope. Preserve existing resources and data; review the Tofu plan
-  before applying it.
-- Do not print or commit secrets, complete database URLs, dumps, or rendered private
-  configurations. Do not use production writes as tests.
-- For backup code, run `go test ./...` and `go vet ./...` in `backups`.
-  Access R2 directly with the Go standard library; keep `pg_dump` as an external
-  tool. Preserve the deliberately simple backup solution.
-- For other changes, run only the relevant checks from the respective instructions.
+- Reuse the existing login/CSRF, hashing, and EXIF functionality. Do not invent
+  missing photo coordinates, capture times, or time zones.
+- For relevant code changes, use `./scripts/run-tests.sh`; it isolates both database
+  connections in a temporary test database. For EXIF-only tests, use
+  `node scripts/upload-metadata.test.cjs`. Choose checks appropriate to the change.
   For documentation-only changes, content, link, and diff checks are sufficient.
-- Do not run installation scripts just to inspect the setup: they may change
-  production or trigger additional backups. Stop any test processes you start
-  afterward; preserve production services and existing data volumes.
+- Do not run tests or migrations against production or the original application's
+  database.
+- Do not print or commit secrets, complete database URLs, dumps, or rendered private
+  configurations.
+- Stop any application or test processes you start afterward. Preserve local data
+  and the development volume `postgres18-data`; do not run
+  `docker compose down --volumes` for the development environment without an
+  explicit request. The test script may remove its own temporary test volume.
+- Templates and static assets are embedded in the Go executable. Rebuild and
+  restart the app after changing them; reloading the browser alone is not enough.
+- Make production changes and deployments only within the requested scope, using
+  the tools and instructions in
+  [cats-of-asia-infra](https://github.com/haikoschol/cats-of-asia-infra).
 - Distinguish planned, implemented, merged, deployed, and actually verified work.
   Historical checks do not guarantee the current live state.
