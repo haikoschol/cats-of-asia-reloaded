@@ -29,6 +29,7 @@ func TestLoadConfig(t *testing.T) {
 		ImageDomain:       "images.example.com",
 		ImageAccountHash:  "example-account-hash",
 		MapboxAccessToken: "example-public-map-token",
+		GoogleMapsAPIKey:  "fake-private-google-key",
 		PostgresPassword:  "fake-private-db-password",
 	}
 	if cfg != want {
@@ -48,6 +49,32 @@ func TestLoadConfig(t *testing.T) {
 		if _, err := loadConfigFile(".env"); err == nil || err.Error() != "DATABASE_URL is not set" {
 			t.Fatalf("wanted a missing DATABASE_URL error, got %v", err)
 		}
+	}
+}
+
+func TestGoogleGeocodingConfiguration(t *testing.T) {
+	clearConfigEnvironment(t)
+	t.Chdir(t.TempDir())
+	if err := os.WriteFile(".env", []byte("DATABASE_URL=postgres://example:example@localhost/photos\nUSERS_DATABASE_URL=postgres://example:example@localhost/users\nGOOGLE_MAPS_API_KEY=' fake-private-google-key '\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := loadConfigFile(".env")
+	if err != nil || cfg.GoogleGeocodingEnabled || cfg.GoogleMapsAPIKey != "fake-private-google-key" {
+		t.Fatal("an existing key must be trimmed and leave geocoding disabled")
+	}
+	t.Setenv("GOOGLE_GEOCODING_ENABLED", "true")
+	cfg, err = loadConfigFile(".env")
+	if err != nil || !cfg.GoogleGeocodingEnabled {
+		t.Fatal("explicit geocoding activation was not loaded")
+	}
+	t.Setenv("GOOGLE_MAPS_API_KEY", "")
+	cfg, err = loadConfigFile(".env")
+	if err != nil || cfg.GoogleMapsAPIKey != "" {
+		t.Fatal("an explicitly empty environment key must override the file without blocking app startup")
+	}
+	t.Setenv("GOOGLE_GEOCODING_ENABLED", "invalid")
+	if _, err := loadConfigFile(".env"); err == nil || err.Error() != "cannot parse environment configuration" {
+		t.Fatal("an invalid activation setting must fail without exposing configuration")
 	}
 }
 
@@ -158,6 +185,7 @@ func clearConfigEnvironment(t *testing.T) {
 		"SESSION_COOKIE_SECURE",
 		"PLAUSIBLE_ENABLED", "PLAUSIBLE_DOMAIN", "PLAUSIBLE_SCRIPT_URL",
 		"CLOUDFLARE_IMAGES_DOMAIN", "CLOUDFLARE_IMAGES_ACCOUNT_HASH", "MAPBOX_ACCESS_TOKEN",
+		"GOOGLE_GEOCODING_ENABLED", "GOOGLE_MAPS_API_KEY",
 	} {
 		// t.Setenv records the original value so cleanup restores it after Unsetenv.
 		t.Setenv(name, "")

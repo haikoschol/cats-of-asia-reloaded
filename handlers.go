@@ -158,6 +158,7 @@ func (app *application) routes() http.Handler {
 	mux.HandleFunc("/api/photos", app.photos)
 	mux.HandleFunc("/api/photos/exists", app.requireLoginJSON(app.photoExists))
 	mux.HandleFunc("/api/photos/nearby", app.nearbyPhotos)
+	mux.HandleFunc("/api/locations/reverse", app.requireLoginJSON(app.reverseGeocode))
 	mux.Handle("/static/", http.FileServerFS(staticFiles))
 	return app.sessionManager.LoadAndSave(app.protectCSRF(mux))
 }

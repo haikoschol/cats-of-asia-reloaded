@@ -426,12 +426,56 @@ development and configuration tests, but cannot load real Cloudflare images or
 Mapbox tiles. Replace them with the corresponding public settings when those
 features are needed.
 
-Future uploads, server-side geocoding, and Mastodon posting use separate private
+The server-side Google Geocoding client uses `GOOGLE_MAPS_API_KEY` and requires
+`GOOGLE_GEOCODING_ENABLED=true`; it is disabled by default, even with an existing
+key. Keep it disabled until credentials and possible costs have been agreed.
+Unknown coordinates use this client when enabled and configured; otherwise the
+endpoint returns HTTP 503. Database hits do not need Google. Keep the key on the
+server, out of browser responses and logs. No live provider calls are needed for
+tests. Google requires a billing-enabled project with the Geocoding API enabled
+and a suitable server API key; see [Google's setup instructions](https://developers.google.com/maps/documentation/geocoding/get-api-key)
+and [usage and billing](https://developers.google.com/maps/documentation/geocoding/usage-and-billing).
+
+Future uploads and Mastodon posting use separate private
 settings: `CLOUDFLARE_IMAGES_ACCOUNT_ID`, `CLOUDFLARE_IMAGES_API_KEY`,
-`GOOGLE_MAPS_API_KEY`, and `MASTODON_ACCESS_TOKEN`. They are not read or required
+and `MASTODON_ACCESS_TOKEN`. They are not read or required
 by the current Go app. Keep them on the server and never pass them to templates,
 JavaScript, JSON responses, or logs. Do not log the complete configuration or
 the credential-bearing database URL.
+
+## Reverse geocoding API
+
+`GET /api/locations/reverse?latitude=13.75&longitude=100.5` requires a valid login.
+Supply each coordinate exactly once: latitude must be a finite number from -90
+to 90, longitude from -180 to 180. Zero is valid; extra parameters are rejected.
+It first looks for the exact coordinate pair in the content database and returns
+`{"city":"Bangkok","country":"Thailand"}` for a stored location. Otherwise,
+when enabled and configured, it requests English Google results and returns
+`{"country":"Chile","cityCandidates":["Santiago"],"city":"Santiago"}`.
+Candidates are sorted and deduplicated; `city` is included only for exactly one
+candidate in Google results. Stored locations return only `city` and `country`.
+Multiple candidates require a choice by the caller. No match returns
+`{"country":null,"cityCandidates":[]}` so the upload form can allow manual entry;
+a country without city candidates is also usable. Missing countries stay `null`.
+This endpoint only suggests locations; it does not save data or upload photos.
+
+Errors use JSON `{"error":"..."}` and are not cached:
+
+| HTTP status | Meaning |
+| --- | --- |
+| 400 | Invalid or missing coordinates/parameters |
+| 401 | A valid login is required |
+| 405 | Use GET |
+| 500 | Authentication or content database failure |
+| 502 | Google rejected the request, could not be reached, or returned an unusable response |
+| 503 | Google lookup is disabled, its key is missing, or its quota/billing limit was reached |
+| 504 | Google request or response timed out |
+
+Google errors do not count as successful no-match results. Provider requests are
+not automatically retried; a failed lookup does not create any data. Provider
+error messages, request URLs, and the API key are not included in errors or logs.
+The content lookup has a 12-second deadline, including connection waits, and the
+Google request has a five-second deadline, including reading the response body.
 
 ## Photo API
 
@@ -655,6 +699,11 @@ Hash-check tests cover known/new hashes, invalid inputs before any photo query,
 separate user/content connections, denied access, and database errors. An HTTP
 test uses cookies and PostgreSQL sessions for login, hash checks, logout, and
 rejection of a replayed session cookie. A pool-wait test checks cancellation.
+
+Reverse-geocoding tests cover exact database hits without a provider call,
+coordinate validation, sorted and deduplicated candidates, no-match responses,
+provider failures, timeouts, and credential-free responses and logs. They use
+simulated Google responses and dummy keys; no paid live requests are made.
 
 Login tests cover correct, incorrect, and missing credentials, retrying after a
 wrong password, homepage redirects, and visiting login while already signed in.

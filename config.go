@@ -14,18 +14,20 @@ import (
 )
 
 type config struct {
-	DatabaseURL         string `env:"DATABASE_URL"`
-	UsersDatabaseURL    string `env:"USERS_DATABASE_URL"`
-	SessionCookieSecure bool   `env:"SESSION_COOKIE_SECURE"`
-	PlausibleEnabled    bool   `env:"PLAUSIBLE_ENABLED"`
-	PlausibleDomain     string `env:"PLAUSIBLE_DOMAIN"`
-	PlausibleScriptURL  string `env:"PLAUSIBLE_SCRIPT_URL"`
-	ImageDomain         string `env:"CLOUDFLARE_IMAGES_DOMAIN"`
-	ImageAccountHash    string `env:"CLOUDFLARE_IMAGES_ACCOUNT_HASH"`
-	MapboxAccessToken   string `env:"MAPBOX_ACCESS_TOKEN"`
-	PostgresUser        string `env:"POSTGRES_USER"`
-	PostgresPassword    string `env:"POSTGRES_PASSWORD"`
-	PostgresDB          string `env:"POSTGRES_DB"`
+	DatabaseURL            string `env:"DATABASE_URL"`
+	UsersDatabaseURL       string `env:"USERS_DATABASE_URL"`
+	SessionCookieSecure    bool   `env:"SESSION_COOKIE_SECURE"`
+	PlausibleEnabled       bool   `env:"PLAUSIBLE_ENABLED"`
+	PlausibleDomain        string `env:"PLAUSIBLE_DOMAIN"`
+	PlausibleScriptURL     string `env:"PLAUSIBLE_SCRIPT_URL"`
+	ImageDomain            string `env:"CLOUDFLARE_IMAGES_DOMAIN"`
+	ImageAccountHash       string `env:"CLOUDFLARE_IMAGES_ACCOUNT_HASH"`
+	MapboxAccessToken      string `env:"MAPBOX_ACCESS_TOKEN"`
+	GoogleGeocodingEnabled bool   `env:"GOOGLE_GEOCODING_ENABLED"`
+	GoogleMapsAPIKey       string `env:"GOOGLE_MAPS_API_KEY"`
+	PostgresUser           string `env:"POSTGRES_USER"`
+	PostgresPassword       string `env:"POSTGRES_PASSWORD"`
+	PostgresDB             string `env:"POSTGRES_DB"`
 }
 
 // Read .env as data, without changing the process environment. Existing
@@ -53,6 +55,7 @@ func loadConfigFile(path string) (config, error) {
 	cfg.ImageDomain = strings.TrimSpace(cfg.ImageDomain)
 	cfg.ImageAccountHash = strings.TrimSpace(cfg.ImageAccountHash)
 	cfg.MapboxAccessToken = strings.TrimSpace(cfg.MapboxAccessToken)
+	cfg.GoogleMapsAPIKey = strings.TrimSpace(cfg.GoogleMapsAPIKey)
 	cfg.PlausibleDomain = strings.ToLower(strings.TrimSpace(cfg.PlausibleDomain))
 	cfg.PlausibleScriptURL = strings.TrimSpace(cfg.PlausibleScriptURL)
 
