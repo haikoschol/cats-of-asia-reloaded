@@ -11,10 +11,11 @@ import (
 )
 
 type application struct {
-	config         config
-	contentDB      *sql.DB
-	usersDB        *sql.DB
-	sessionManager *scs.SessionManager
+	config                config
+	contentDB             *sql.DB
+	usersDB               *sql.DB
+	sessionManager        *scs.SessionManager
+	googleGeocodingClient *http.Client
 }
 
 func main() {

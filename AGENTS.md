@@ -4,9 +4,12 @@
 
 1. Check the current branch and `git status`. Do not switch branches or clean up
    anything without being asked.
-2. Use the repository, Git history, relevant GitHub issues and PRs, and documentation
+2. Never make changes on `main` unless the user explicitly requests working on
+   `main`. If `main` is checked out, clarify the feature branch before editing.
+   A general request to implement something is not permission to work on `main`.
+3. Use the repository, Git history, relevant GitHub issues and PRs, and documentation
    to establish the current project state.
-3. Read the relevant GitHub issue and existing PR comments when the request refers
+4. Read the relevant GitHub issue and existing PR comments when the request refers
    to them. Check the current status in the CatsOfAsia project when the next task
    still needs to be clarified; do not start a ticket on your own.
 
@@ -21,8 +24,19 @@
   first. Do not use Python without asking before.
 - Respond in the user's language, clearly and without unnecessary jargon.
   Explain things to Peter in German. Keep README files short and practical.
+- When explaining a ticket, always break the work into numbered steps and briefly
+  explain each one. Work through the steps one at a time. After completing a step,
+  report the result and state the next step. Respect requests to carry out only a
+  specific step.
+- Once implementation and the relevant checks are complete, clearly state whether
+  committing and pushing are still pending. This does not authorize a commit or
+  push; wait for an explicit instruction as required below.
 - For requests to "just explain/check," do not modify files or services. Carry out
   clear implementation requests independently within their scope.
+- If an instruction appears mistaken, contradictory, or unlikely to achieve the
+  user's intended goal, explain the concrete concern and ask for clarification
+  before carrying it out. Do not silently implement a request that does not make
+  sense in context.
 - Only commit, push, merge, or post GitHub messages when explicitly instructed.
   Do not ask again for each substep when approval has already been given.
 
