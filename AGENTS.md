@@ -31,7 +31,11 @@
   browser UI. Discuss new languages, build tools, or major architectural changes
   first. Do not use Python without asking before.
 - Respond in the user's language, clearly and without unnecessary jargon.
-  Explain things to Peter in German. Keep README files short and practical.
+  Explain things to Peter in German.
+- Keep README files extremely short: project purpose and essential local setup,
+  run and test instructions only. Put necessary further guidance in concise,
+  task-focused docs without duplication. Do not add implementation walkthroughs,
+  test inventories or one-off test/deployment reports.
 - When explaining a ticket, always break the work into numbered steps and briefly
   explain each one. Work through the steps one at a time. After completing a step,
   report the result and state the next step. Respect requests to carry out only a
