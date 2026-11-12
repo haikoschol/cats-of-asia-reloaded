@@ -4,12 +4,24 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 )
+
+func normalizePhotoHash(hash string) (string, error) {
+	const invalidHash = "sha256 must contain exactly 64 hexadecimal characters"
+	if len(hash) != 64 {
+		return "", errors.New(invalidHash)
+	}
+	if _, err := hex.DecodeString(hash); err != nil {
+		return "", errors.New(invalidHash)
+	}
+	return strings.ToLower(hash), nil
+}
 
 func (app *application) photoExists(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -22,14 +34,9 @@ func (app *application) photoExists(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "exactly one sha256 parameter is required", http.StatusBadRequest)
 		return
 	}
-	hash := query.Get("sha256")
-	const invalidHash = "sha256 must contain exactly 64 hexadecimal characters"
-	if len(hash) != 64 {
-		http.Error(w, invalidHash, http.StatusBadRequest)
-		return
-	}
-	if _, err := hex.DecodeString(hash); err != nil {
-		http.Error(w, invalidHash, http.StatusBadRequest)
+	hash, err := normalizePhotoHash(query.Get("sha256"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -39,7 +46,7 @@ func (app *application) photoExists(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	var exists bool
 	err = app.contentDB.QueryRowContext(ctx,
-		"SELECT EXISTS (SELECT 1 FROM photos_photo WHERE sha256 = $1)", strings.ToLower(hash)).Scan(&exists)
+		"SELECT EXISTS (SELECT 1 FROM photos_photo WHERE sha256 = $1)", hash).Scan(&exists)
 	if err != nil {
 		log.Printf("photo existence query error: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

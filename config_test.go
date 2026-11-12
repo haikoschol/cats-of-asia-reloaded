@@ -24,10 +24,13 @@ func TestLoadConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := config{
+		HTTPListenAddr:    ":3000",
 		DatabaseURL:       "postgres://example:example@localhost:5433/cats_test",
 		UsersDatabaseURL:  "postgres://example:example@localhost:5433/users_test",
 		ImageDomain:       "images.example.com",
 		ImageAccountHash:  "example-account-hash",
+		ImageAccountID:    "fake-private-cloudflare-account-id",
+		ImageAPIKey:       "fake-private-cloudflare-key",
 		MapboxAccessToken: "example-public-map-token",
 		GoogleMapsAPIKey:  "fake-private-google-key",
 		PostgresPassword:  "fake-private-db-password",
@@ -49,6 +52,50 @@ func TestLoadConfig(t *testing.T) {
 		if _, err := loadConfigFile(".env"); err == nil || err.Error() != "DATABASE_URL is not set" {
 			t.Fatalf("wanted a missing DATABASE_URL error, got %v", err)
 		}
+	}
+}
+
+func TestHTTPListenAddress(t *testing.T) {
+	clearConfigEnvironment(t)
+	t.Chdir(t.TempDir())
+	t.Setenv("DATABASE_URL", "postgres://example:example@localhost/photos")
+	t.Setenv("USERS_DATABASE_URL", "postgres://example:example@localhost/users")
+	for _, address := range []string{":3000", "127.0.0.1:3001", "[::1]:3001", "localhost:3001"} {
+		t.Setenv("HTTP_LISTEN_ADDR", " "+address+" ")
+		cfg, err := loadConfigFile(".env")
+		if err != nil || cfg.HTTPListenAddr != address {
+			t.Fatal("valid HTTP listen address was rejected")
+		}
+	}
+	for _, address := range []string{":0", ":65536", "127.0.0.1", "http://127.0.0.1:3001", "private-test-marker@host:3001"} {
+		t.Setenv("HTTP_LISTEN_ADDR", address)
+		_, err := loadConfigFile(".env")
+		if err == nil || !strings.HasPrefix(err.Error(), "HTTP_LISTEN_ADDR must") || strings.Contains(err.Error(), "private-test-marker") {
+			t.Fatal("invalid HTTP listen address was accepted or exposed")
+		}
+	}
+}
+
+func TestCloudflareUploadConfiguration(t *testing.T) {
+	clearConfigEnvironment(t)
+	t.Chdir(t.TempDir())
+	t.Setenv("DATABASE_URL", "postgres://example:example@localhost/photos")
+	t.Setenv("USERS_DATABASE_URL", "postgres://example:example@localhost/users")
+	cfg, err := loadConfigFile(".env")
+	if err != nil || cfg.ImageAccountID != "" || cfg.ImageAPIKey != "" {
+		t.Fatal("upload credentials must be optional for startup")
+	}
+	if err := os.WriteFile(".env", []byte("CLOUDFLARE_IMAGES_ACCOUNT_ID=' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa '\nCLOUDFLARE_IMAGES_API_KEY=' fake-private-cloudflare-key '\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = loadConfigFile(".env")
+	if err != nil || cfg.ImageAccountID != strings.Repeat("a", 32) || cfg.ImageAPIKey != "fake-private-cloudflare-key" {
+		t.Fatal("private upload settings were not loaded and trimmed")
+	}
+	t.Setenv("CLOUDFLARE_IMAGES_API_KEY", "")
+	cfg, err = loadConfigFile(".env")
+	if err != nil || cfg.ImageAPIKey != "" {
+		t.Fatal("explicit empty upload key did not override dotenv")
 	}
 }
 
@@ -182,9 +229,11 @@ func clearConfigEnvironment(t *testing.T) {
 	for _, name := range []string{
 		"DATABASE_URL", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB",
 		"USERS_DATABASE_URL",
+		"HTTP_LISTEN_ADDR",
 		"SESSION_COOKIE_SECURE",
 		"PLAUSIBLE_ENABLED", "PLAUSIBLE_DOMAIN", "PLAUSIBLE_SCRIPT_URL",
 		"CLOUDFLARE_IMAGES_DOMAIN", "CLOUDFLARE_IMAGES_ACCOUNT_HASH", "MAPBOX_ACCESS_TOKEN",
+		"CLOUDFLARE_IMAGES_ACCOUNT_ID", "CLOUDFLARE_IMAGES_API_KEY",
 		"GOOGLE_GEOCODING_ENABLED", "GOOGLE_MAPS_API_KEY",
 	} {
 		// t.Setenv records the original value so cleanup restores it after Unsetenv.

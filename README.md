@@ -34,7 +34,9 @@ Both `DATABASE_URL` and `USERS_DATABASE_URL` must be set explicitly:
 - `DATABASE_URL` points to an existing database with the Django photo schema.
   Ask the database owner for access; the placeholder in `.env.example` does not
   connect to a real server. Photos **and the Places menu** use this connection,
-  which the Go app opens read-only.
+  which the Go app opens with writes enabled for upload preparation. Existing
+  photo queries still use read-only transactions. The database role needs photo
+  table and sequence write permissions before uploads can save data.
 - `USERS_DATABASE_URL` points to the local Docker database, normally on port
   `5432`, and must match `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`.
   Only users and sessions use this connection.
@@ -270,10 +272,11 @@ the local site's nearby-photo endpoint and are not saved in browser storage.
 A simulated Bangkok location (latitude `13.75`, longitude `100.5`) can be used
 to verify positive results while testing from elsewhere.
 
-### Upload previews
+### Photo upload
 
-Signed-in users can open **Upload** to select JPEGs and preview them locally.
-See [Upload preparation](docs/upload.md) for the current behavior and checks.
+Signed-in users can open **Upload** to preview JPEGs, review locations, and upload
+each photo. Failed saves can be retried without transferring the image again.
+See [Photo upload](docs/upload.md) for requirements and checks.
 
 ### Existing PostgreSQL 17 databases
 
@@ -379,12 +382,15 @@ environment, not in `.env.example`.
 
 | Setting | Purpose | Requirement |
 | --- | --- | --- |
-| `DATABASE_URL` | Read-only content connection for photos, coordinates, and locations; server-only | Required explicitly; use TLS for a remote source |
+| `HTTP_LISTEN_ADDR` | HTTP bind address; use `127.0.0.1:3001` for a separate test instance behind Caddy | Defaults to `:3000`; IPv4/IPv6 or localhost plus port |
+| `DATABASE_URL` | Read/write content connection for photos, coordinates, and locations; server-only | Required explicitly; use TLS for a remote source |
 | `USERS_DATABASE_URL` | Read/write connection for users and sessions; server-only | Required explicitly; normally the local Docker database |
 | `SESSION_COOKIE_SECURE` | Send the session cookie over HTTPS only | Defaults to `false` for local HTTP; set `true` for HTTPS production |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Local Docker database and pgconsole credentials; server-only | Required by the development and test scripts |
 | `CLOUDFLARE_IMAGES_DOMAIN` | Public image-delivery hostname, without a scheme or path | Required when the photo API returns photos |
 | `CLOUDFLARE_IMAGES_ACCOUNT_HASH` | Public account identifier used in image URLs | Required when the photo API returns photos |
+| `CLOUDFLARE_IMAGES_ACCOUNT_ID` | Private Cloudflare account ID for upload requests; server-only | Required only for upload URLs |
+| `CLOUDFLARE_IMAGES_API_KEY` | Private scoped Cloudflare API token with Images Write permission; server-only | Required only for upload URLs |
 | `MAPBOX_ACCESS_TOKEN` | Public browser token for fetching map tiles | Required when displaying a map |
 
 The homepage displays a map with photo markers and selectable previews when a
@@ -436,12 +442,18 @@ tests. Google requires a billing-enabled project with the Geocoding API enabled
 and a suitable server API key; see [Google's setup instructions](https://developers.google.com/maps/documentation/geocoding/get-api-key)
 and [usage and billing](https://developers.google.com/maps/documentation/geocoding/usage-and-billing).
 
-Future uploads and Mastodon posting use separate private
-settings: `CLOUDFLARE_IMAGES_ACCOUNT_ID`, `CLOUDFLARE_IMAGES_API_KEY`,
-and `MASTODON_ACCESS_TOKEN`. They are not read or required
-by the current Go app. Keep them on the server and never pass them to templates,
-JavaScript, JSON responses, or logs. Do not log the complete configuration or
-the credential-bearing database URL.
+The upload-URL endpoint uses `CLOUDFLARE_IMAGES_ACCOUNT_ID` and
+`CLOUDFLARE_IMAGES_API_KEY` (a scoped Images API token, despite the legacy setting
+name). Missing credentials leave the rest of the app usable and return HTTP 503
+for upload-URL requests. See [upload preparation](docs/upload.md#upload-backend)
+for the API and current implementation limits. `MASTODON_ACCESS_TOKEN` is not
+read yet. Keep private settings on the server, out of templates, JavaScript,
+JSON responses, and logs. Do not log complete configuration or database URLs.
+
+`POST /api/photos/save` verifies the completed image and saves photo metadata
+transactionally. Identical retries do not create duplicate rows. Both upload
+actions require login and CSRF protection. The browser form uses both actions;
+see the [save API](docs/upload.md#saving-photo-metadata).
 
 ## Reverse geocoding API
 
@@ -583,12 +595,12 @@ Set `DATABASE_URL` in your ignored `.env` using the content database details
 provided by the owner. Keep `USERS_DATABASE_URL` pointing to the separate users
 database; the content connection is never used for account creation or sessions.
 
-Every content connection starts with `default_transaction_read_only=on`,
+Every content connection starts with `default_transaction_read_only=off`,
 queries have a ten-second statement timeout, and photo queries additionally
 use a read-only transaction. Photo and location reads have twelve-second context
 deadlines, including pool waits. Photo transactions end before image URLs are
-constructed. A dedicated read-only database role is preferable; these application
-settings do not replace database access permissions.
+constructed. The database role must separately have the write permissions
+needed for uploads; the connection setting does not grant database privileges.
 
 The content connection is established lazily on the first location/photo read.
 An unavailable source now also affects homepage/login rendering because both
@@ -683,13 +695,15 @@ and run database tests directly.
 Schema tests also check inserting related photo data in dependency order,
 geographic coordinates, cascading deletions, retaining photos without
 coordinates, and reapplying the schema without losing data.
-Photo API integration tests cover a normal record, an empty result, and a photo
-without coordinates, including UTC timestamps, longitude/latitude ordering,
+Photo API integration tests cover a normal record, an empty result, photos with
+unknown altitude, and a photo without coordinates, including UTC timestamps,
+longitude/latitude ordering,
 image URLs, place IDs (including `null` without coordinates), public JSON fields, and selection of the content connection for
 both photos and locations. A login regression check uses different connection-
 local tables to verify that authentication reads usersDB while the header
-reads contentDB. A connection check verifies the enforced read-only default
-and rejection of content writes.
+reads contentDB. Connection checks verify that content writes are possible while
+explicitly read-only transactions still reject writes. Schema upgrade checks
+cover unknown altitude, duplicate protection, and preservation of existing data.
 A pool-wait check verifies that a caller deadline also cancels photo reads while
 the content database's only connection is occupied.
 Temporary tables exist only on their test connection and are removed when it
@@ -761,6 +775,10 @@ following tables are included:
 | `photos_post` | Publication time and references to a photo's hash and a platform |
 
 Coordinates use PostGIS `geography(Point, 4326)` with a spatial GiST index.
+Altitude may be `NULL` when unknown; a real zero and negative heights remain
+valid values. A partial unique index prevents duplicate points with unknown
+altitude. When reusing coordinates, match altitude with `IS NOT DISTINCT FROM`
+so two unknown heights match without being treated as zero.
 Points are supplied as longitude first, latitude second. Unique constraints
 prevent duplicate city/country pairs, point/altitude pairs, and photo/platform
 pairs. Foreign keys check references immediately. PostgreSQL handles deletion
@@ -791,10 +809,26 @@ The schema removes the obsolete `greetings` demo table, including its example
 rows, on the next start. Users, sessions, and photo data are preserved; no
 database reset is needed for this change.
 
-Re-running either script preserves the remaining tables and data. `CREATE TABLE
-IF NOT EXISTS` does not change previously created tables. If you used an earlier
-development version of this schema, reset your local database as described
-below so the simplified constraints take effect.
+Re-running either script preserves the remaining tables and data. The schema
+also upgrades existing local coordinate tables to allow unknown altitude;
+no database reset is needed for this change. Other older schema differences
+are not automatically migrated by `CREATE TABLE IF NOT EXISTS`.
+
+### Preparing an existing Reloaded photo database for uploads
+
+The targeted upgrade is [001_nullable_altitude.sql](scripts/migrations/001_nullable_altitude.sql).
+It allows unknown altitude and adds duplicate protection without changing
+existing heights or photo references. It can be reapplied safely. Run it with
+`psql -X --single-transaction -v ON_ERROR_STOP=1 -f scripts/migrations/001_nullable_altitude.sql`
+using an administrator connection to the intended Reloaded photo database.
+Applying it on a server is part of the separate deployment procedure in
+[cats-of-asia-infra](https://github.com/haikoschol/cats-of-asia-infra);
+the application does not run this migration on startup. Do not apply the full
+local schema to the original application's database.
+
+The `DATABASE_URL` role also needs write permissions on the upload's photo
+tables and identity sequences. Enabling writes in the Go connection does not
+grant those privileges. No role or server configuration is changed by this script.
 
 ### Resetting the local development database
 

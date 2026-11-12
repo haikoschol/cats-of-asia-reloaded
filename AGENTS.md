@@ -19,6 +19,14 @@
   request. Do not add systems, abstractions, or features for hypothetical future use.
 - Photo data is not highly critical; downtime during manual recovery is acceptable.
   Still protect credentials and user accounts.
+- Before creating an account or creating/changing any access credentials, ask
+  the user currently working with you for the username, password or other
+  required credential values. This applies to all credentials, including test,
+  database and service accounts, API keys and tokens. Never choose or generate
+  credentials on your own; ask that user first. If they have already explicitly
+  supplied the required values for that action, use them without asking again.
+  Only generate credentials if they explicitly request or approve generation.
+  Never put actual credentials in this file or Git.
 - Prefer Go and the existing architecture. Reuse the existing JavaScript for the
   browser UI. Discuss new languages, build tools, or major architectural changes
   first. Do not use Python without asking before.

@@ -15,7 +15,7 @@ func openContentDatabase(databaseURL string) (*sql.DB, error) {
 		// Driver parse errors may include the original credential-bearing URL.
 		return nil, errors.New("cannot parse DATABASE_URL")
 	}
-	cfg.RuntimeParams["default_transaction_read_only"] = "on"
+	cfg.RuntimeParams["default_transaction_read_only"] = "off"
 	cfg.RuntimeParams["statement_timeout"] = "10000"
 	cfg.ConnectTimeout = 5 * time.Second
 	db := stdlib.OpenDB(*cfg)
@@ -29,5 +29,9 @@ func openUsersDatabase(databaseURL string) (*sql.DB, error) {
 		return nil, errors.New("cannot parse USERS_DATABASE_URL")
 	}
 	cfg.ConnectTimeout = 5 * time.Second
-	return stdlib.OpenDB(*cfg), nil
+	db := stdlib.OpenDB(*cfg)
+	// Sessions and content can share one PostgreSQL role. Keep their combined
+	// pools at six connections, below the test role's limit of eight.
+	db.SetMaxOpenConns(3)
+	return db, nil
 }

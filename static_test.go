@@ -1,13 +1,79 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/alexedwards/scs/v2"
 )
+
+type unavailableSessionStore struct {
+	scs.Store
+	reads atomic.Int32
+}
+
+func (store *unavailableSessionStore) Find(string) ([]byte, bool, error) {
+	store.reads.Add(1)
+	return nil, false, errors.New("session database unavailable")
+}
+
+func TestStaticAssetsIgnoreUnavailableSessions(t *testing.T) {
+	sessions := scs.New()
+	store := &unavailableSessionStore{Store: sessions.Store}
+	sessions.Store = store
+	handler := (&application{sessionManager: sessions}).routes()
+
+	// A signed-in browser sends its session cookie on parallel asset requests.
+	// A failing session database must never replace JavaScript with a text error.
+	for _, path := range []string{
+		"/static/js/places.js", "/static/js/map.js", "/static/js/photo-links.js",
+		"/static/js/favorites-store.js", "/static/css/style.css",
+	} {
+		t.Run(path, func(t *testing.T) {
+			t.Parallel()
+			for _, method := range []string{http.MethodGet, http.MethodHead} {
+				request := httptest.NewRequest(method, path, nil)
+				request.AddCookie(&http.Cookie{Name: sessions.Cookie.Name, Value: "test-session-token"})
+				response := httptest.NewRecorder()
+				handler.ServeHTTP(response, request)
+				wantType := "javascript"
+				if strings.HasSuffix(path, ".css") {
+					wantType = "text/css"
+				}
+				if response.Code != http.StatusOK || !strings.Contains(response.Header().Get("Content-Type"), wantType) {
+					t.Fatalf("%s asset returned %d (%s)", method, response.Code, response.Header().Get("Content-Type"))
+				}
+				if len(response.Result().Cookies()) != 0 {
+					t.Fatal("static request changed the login session")
+				}
+			}
+		})
+	}
+	t.Cleanup(func() {
+		if store.reads.Load() != 0 {
+			t.Error("static requests accessed the session store")
+		}
+	})
+}
+
+func TestSessionFailureStillBlocksDynamicRoutes(t *testing.T) {
+	sessions := scs.New()
+	sessions.Store = &unavailableSessionStore{Store: sessions.Store}
+	handler := (&application{sessionManager: sessions}).routes()
+	for _, path := range []string{"/upload", "/api/photos", "/api/photos/save"} {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		request.AddCookie(&http.Cookie{Name: sessions.Cookie.Name, Value: "test-session-token"})
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusInternalServerError {
+			t.Fatalf("dynamic route %s bypassed a failed session lookup", path)
+		}
+	}
+}
 
 func TestStaticAssets(t *testing.T) {
 	t.Chdir(t.TempDir())
@@ -29,6 +95,7 @@ func TestStaticAssets(t *testing.T) {
 		{path: "/static/js/nearme.js", contentType: "javascript", content: "searchNearby", status: http.StatusOK},
 		{path: "/static/js/upload.js", contentType: "javascript", content: "preparePreview", status: http.StatusOK},
 		{path: "/static/js/upload-metadata.js", contentType: "javascript", content: "UploadMetadata", status: http.StatusOK},
+		{path: "/static/js/upload-transfer.js", contentType: "javascript", content: "UploadTransfer", status: http.StatusOK},
 		{path: "/static/vendor/exifr/exifr-lite-7.1.3.umd.js", contentType: "javascript", content: "exifr", status: http.StatusOK},
 		{path: "/static/js/map.js", contentType: "javascript", content: "worldCopyJump: true", status: http.StatusOK},
 		{path: "/static/js/photo-popup.js", contentType: "javascript", content: "createPhotoPopup", status: http.StatusOK},

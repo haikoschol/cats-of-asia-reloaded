@@ -190,6 +190,28 @@ main {
   overflow-y: auto;
 }
 
+.photo-error-actions:not([hidden]) {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+#photo-retry {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem;
+  font: inherit;
+  background: #050505;
+  color: #ff5f5f;
+  border: 1px solid currentColor;
+  cursor: pointer;
+}
+
+#photo-retry:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
 .toast {
   display: flex;
   align-items: flex-start;

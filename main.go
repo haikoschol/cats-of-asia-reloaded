@@ -11,11 +11,12 @@ import (
 )
 
 type application struct {
-	config                config
-	contentDB             *sql.DB
-	usersDB               *sql.DB
-	sessionManager        *scs.SessionManager
-	googleGeocodingClient *http.Client
+	config                 config
+	contentDB              *sql.DB
+	usersDB                *sql.DB
+	sessionManager         *scs.SessionManager
+	googleGeocodingClient  *http.Client
+	cloudflareImagesClient *http.Client
 }
 
 func main() {
@@ -85,6 +86,6 @@ func main() {
 		sessionManager: sessionManager,
 	}
 
-	log.Println("starting server on http://localhost:3000")
-	log.Fatal(http.ListenAndServe(":3000", app.routes()))
+	log.Printf("starting server on %s", cfg.HTTPListenAddr)
+	log.Fatal(http.ListenAndServe(cfg.HTTPListenAddr, app.routes()))
 }

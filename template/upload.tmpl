@@ -9,13 +9,15 @@
 {{define "pageScripts"}}
   <script src="/static/vendor/exifr/exifr-lite-7.1.3.umd.js" defer></script>
   <script src="/static/js/upload-metadata.js" defer></script>
+  <script src="/static/js/upload-transfer.js" defer></script>
   <script src="/static/js/upload.js" defer></script>
 {{end}}
 
 {{define "content"}}
   <section class="upload-page" aria-labelledby="upload-title">
     <h1 id="upload-title">Upload</h1>
-    <p>Choose JPEG photos to preview, check for duplicates, and read capture details. Files are not uploaded when selected.</p>
+    <p>Choose JPEG photos to preview, check for duplicates, and review capture details and locations. Files are not uploaded when selected.</p>
+    <p id="upload-help-save">Check each photo, then choose Upload. Keep this page open until the photo is saved.</p>
     <div class="upload-controls">
       <label for="upload-files">Choose one or more photos</label>
       <input id="upload-files" type="file" accept="image/jpeg,.jpg,.jpeg" multiple aria-describedby="upload-help" disabled>
@@ -24,6 +26,27 @@
     </div>
     <p id="upload-status" role="status">No photos selected.</p>
     <div id="upload-list" class="upload-list"></div>
+    <template id="upload-location-form">
+      <form class="upload-location">
+        <fieldset>
+          <legend>Location</legend>
+          <label class="upload-city-label">City</label>
+          <input class="upload-city" name="city" type="text" maxlength="255" required>
+          <div class="upload-candidates" hidden>
+            <label class="upload-candidates-label">Suggested cities</label>
+            <select class="upload-city-candidates" name="cityCandidate"></select>
+          </div>
+          <label class="upload-country-label">Country</label>
+          <input class="upload-country" name="country" type="text" maxlength="255" required>
+          <p class="upload-location-status upload-file-status" role="status"></p>
+          <button class="upload-location-retry" type="button" hidden>Retry location search</button>
+        </fieldset>
+        <p class="upload-readiness upload-file-status" role="status"></p>
+        <button class="upload-submit" type="submit" aria-describedby="upload-help-save" disabled>Upload</button>
+        <p class="upload-transfer-status upload-file-status" role="status"></p>
+        <a class="upload-map-link" hidden>View on map</a>
+      </form>
+    </template>
     <noscript><p>Enable JavaScript to select photos and see previews.</p></noscript>
   </section>
 {{end}}
