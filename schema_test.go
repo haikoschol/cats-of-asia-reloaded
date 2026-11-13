@@ -110,6 +110,72 @@ func TestPhotoSchema(t *testing.T) {
 	assertSchemaCount(t, tx, "SELECT count(*) FROM photos_photo", 1)
 }
 
+func TestNullableAltitudeUpgrade(t *testing.T) {
+	for _, script := range []string{"scripts/schema.sql", "scripts/migrations/001_nullable_altitude.sql"} {
+		t.Run(script, func(t *testing.T) {
+			db, err := sql.Open("pgx", testDatabaseURL(t))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			tx, err := db.Begin()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback()
+
+			// Reproduce the previous schema with existing photo data. Everything,
+			// including the schema changes, is rolled back after this subtest.
+			if _, err := tx.Exec(`
+				DROP INDEX photos_coordinates_unknown_altitude_idx;
+				ALTER TABLE photos_coordinates ALTER COLUMN altitude SET NOT NULL;
+				INSERT INTO photos_location (id, city, country, tzoffset)
+				VALUES (-81, 'Altitude test', 'Test country', 0);
+				INSERT INTO photos_coordinates (id, point, altitude, location_id)
+				VALUES (-82, ST_GeogFromText('SRID=4326;POINT(100.5 13.75)'), 0, -81);
+				INSERT INTO photos_photo (id, filename, sha256, timestamp, coordinates_id)
+				VALUES ('81000000-0000-4000-8000-000000000001', 'existing.jpg', repeat('8', 64), '2026-01-01T12:00:00Z', -82);
+			`); err != nil {
+				t.Fatal(err)
+			}
+			migration, err := os.ReadFile(script)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tx.Exec(string(migration)); err != nil {
+				t.Fatalf("upgrade: %v", err)
+			}
+			assertSchemaCount(t, tx, `SELECT count(*) FROM photos_photo p
+				JOIN photos_coordinates c ON c.id = p.coordinates_id
+				WHERE p.sha256 = repeat('8', 64) AND c.altitude = 0
+				AND p.timestamp = '2026-01-01T12:00:00Z'`, 1)
+
+			// Unknown and zero heights must coexist, but duplicates of either
+			// must be rejected even when an insert races with another upload.
+			if _, err := tx.Exec(`
+				INSERT INTO photos_coordinates (id, point, altitude, location_id) VALUES
+				(-83, ST_GeogFromText('SRID=4326;POINT(100.5 13.75)'), NULL, -81),
+				(-84, ST_GeogFromText('SRID=4326;POINT(100.5 13.75)'), NULL, -81),
+				(-85, ST_GeogFromText('SRID=4326;POINT(100.5 13.75)'), 0, -81),
+				(-86, ST_GeogFromText('SRID=4326;POINT(100.5 13.75)'), -14, -81)
+				ON CONFLICT DO NOTHING;
+			`); err != nil {
+				t.Fatal(err)
+			}
+			assertSchemaCount(t, tx, "SELECT count(*) FROM photos_coordinates WHERE location_id = -81", 3)
+			assertSchemaCount(t, tx, "SELECT count(*) FROM photos_coordinates WHERE location_id = -81 AND altitude IS NULL", 1)
+			assertSchemaCount(t, tx, "SELECT count(*) FROM photos_coordinates WHERE location_id = -81 AND altitude = 0", 1)
+			assertSchemaCount(t, tx, "SELECT count(*) FROM photos_coordinates WHERE location_id = -81 AND altitude = -14", 1)
+
+			// Reapplying the upgrade also preserves newly stored unknown heights.
+			if _, err := tx.Exec(string(migration)); err != nil {
+				t.Fatalf("reapply upgrade: %v", err)
+			}
+			assertSchemaCount(t, tx, "SELECT count(*) FROM photos_coordinates WHERE location_id = -81", 3)
+		})
+	}
+}
+
 func assertSchemaCount(t *testing.T, tx *sql.Tx, query string, want int) {
 	t.Helper()
 	var got int

@@ -23,6 +23,10 @@
     <div class="map-messages">
       <p id="map-status" role="status"{{if not .MapError}} hidden{{end}}>{{if .MapError}}{{.MapError}}{{else}}Loading map…{{end}}</p>
       <p id="photo-status" role="status" hidden></p>
+      <div id="photo-error-actions" class="photo-error-actions" hidden>
+        <button id="photo-retry" type="button">Retry loading photos</button>
+        <button id="photo-error-dismiss" class="toast-close" type="button" aria-label="Dismiss photo error">×</button>
+      </div>
       <div id="toast-messages" class="toast-messages" aria-live="polite" aria-relevant="additions"></div>
     </div>
     <div id="photo-map" class="map-container" data-mapbox-token="{{.MapboxAccessToken}}" aria-label="Interactive map" aria-describedby="map-status"></div>

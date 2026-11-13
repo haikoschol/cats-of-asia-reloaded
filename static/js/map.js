@@ -162,6 +162,9 @@
   });
 
   const photoStatus = document.getElementById("photo-status");
+  const photoErrorActions = document.getElementById("photo-error-actions");
+  const photoRetry = document.getElementById("photo-retry");
+  const photoDismiss = document.getElementById("photo-error-dismiss");
   const markers = L.featureGroup().addTo(map);
   const expandedMarkers = L.featureGroup().addTo(map);
   const photosByID = new Map();
@@ -175,6 +178,43 @@
   let expandedGroup = null;
   let selectedMarker = null;
   let popupAutoPan = false;
+  let photosLoading = false;
+  let photoErrorNeedsReload = false;
+
+  photoRetry.addEventListener("click", () => {
+    if (photoErrorNeedsReload) {
+      window.location.reload();
+      return;
+    }
+    return loadPhotos();
+  });
+  photoDismiss.addEventListener("click", () => {
+    photoStatus.hidden = true;
+    photoErrorActions.hidden = true;
+    container.focus({ preventScroll: true });
+  });
+
+  function clearPhotos() {
+    photosLoaded = false;
+    totalPhotos = 0;
+    collapseGroup();
+    photosByID.clear();
+    // Keep the place IDs from the page so a retry can resolve the selected place.
+    for (const photos of photosByPlace.values()) photos.length = 0;
+    photoGroups.clear();
+    markers.clearLayers();
+  }
+
+  function showPhotoError(displayFailed) {
+    clearPhotos();
+    photoErrorNeedsReload = displayFailed;
+    photoStatus.textContent = displayFailed
+      ? "Photos could not be displayed. Please reload the page to try again."
+      : "Photos could not be loaded. Please try again.";
+    photoStatus.hidden = false;
+    photoRetry.textContent = displayFailed ? "Reload page" : "Retry loading photos";
+    photoErrorActions.hidden = false;
+  }
 
   function hasValidCoordinates(photo) {
     return photo &&
@@ -360,10 +400,23 @@
   });
 
   async function loadPhotos() {
+    if (photosLoading) return;
+    photosLoading = true;
+    photoRetry.disabled = true;
+    photoErrorActions.hidden = true;
     let selectedFromURL = false;
+    let displayFailed = true;
     photoStatus.textContent = "Loading photos…";
     photoStatus.hidden = true;
     try {
+      // A failed dependency download is a display error, not a failed photo API.
+      if (typeof readPhotoLink !== "function" || typeof createPhotoPopup !== "function" ||
+          typeof createPhotoShare !== "function" || typeof FavoriteStore !== "function" ||
+          typeof favoriteStore === "undefined" || typeof photoImageURL !== "function" ||
+          typeof openPhotoViewer !== "function" || typeof showToast !== "function") {
+        throw new Error("Photo display scripts unavailable");
+      }
+      displayFailed = false;
       const response = await fetch("/api/photos", {
         headers: { Accept: "application/json" },
         signal: AbortSignal.timeout(15000),
@@ -372,6 +425,8 @@
       const photos = await response.json();
       if (!Array.isArray(photos)) throw new Error("Invalid photo response");
 
+      displayFailed = true;
+      clearPhotos();
       for (const photo of photos) {
         if (photo && typeof photo.id === "string") {
           photosByID.set(photo.id.toLowerCase(), photo);
@@ -409,14 +464,10 @@
       // Read the current URL, including selections made while photos loaded.
       selectedFromURL = showURLSelection();
     } catch {
-      collapseGroup();
-      photosLoaded = false;
-      photosByID.clear();
-      photosByPlace.clear();
-      photoGroups.clear();
-      markers.clearLayers();
-      photoStatus.textContent = "Photos could not be loaded. Please reload the page to try again.";
-      photoStatus.hidden = false;
+      showPhotoError(displayFailed);
+    } finally {
+      photosLoading = false;
+      photoRetry.disabled = false;
     }
     rememberView = true;
     saveMapView();
@@ -427,7 +478,8 @@
   // Direct links need photo data to resolve their target before any fallback.
   // Otherwise start location lookup immediately alongside the photo request.
   const initialURL = new URL(window.location.href);
-  if (!readPhotoLink(initialURL)?.photoID && !photosByPlace.has(initialURL.searchParams.get("place"))) {
+  if (typeof readPhotoLink === "function" && !readPhotoLink(initialURL)?.photoID &&
+      !photosByPlace.has(initialURL.searchParams.get("place"))) {
     useBrowserLocation();
   }
 })();

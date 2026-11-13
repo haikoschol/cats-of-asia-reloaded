@@ -157,8 +157,14 @@ func (app *application) routes() http.Handler {
 	mux.HandleFunc("/logout", app.requireLogin(app.logout))
 	mux.HandleFunc("/api/photos", app.photos)
 	mux.HandleFunc("/api/photos/exists", app.requireLoginJSON(app.photoExists))
+	mux.HandleFunc("/api/photos/upload-url", app.requireLoginJSON(app.createPhotoUploadURL))
+	mux.HandleFunc("/api/photos/save", app.requireLoginJSON(app.saveUploadedPhoto))
 	mux.HandleFunc("/api/photos/nearby", app.nearbyPhotos)
 	mux.HandleFunc("/api/locations/reverse", app.requireLoginJSON(app.reverseGeocode))
-	mux.Handle("/static/", http.FileServerFS(staticFiles))
-	return app.sessionManager.LoadAndSave(app.protectCSRF(mux))
+	// Public embedded assets need no session lookup. A session-store failure
+	// must not turn JavaScript/CSS requests into plain-text error responses.
+	root := http.NewServeMux()
+	root.Handle("/static/", http.FileServerFS(staticFiles))
+	root.Handle("/", app.sessionManager.LoadAndSave(app.protectCSRF(mux)))
+	return root
 }

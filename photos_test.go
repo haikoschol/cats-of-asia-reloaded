@@ -48,6 +48,13 @@ func TestPhotosAPI(t *testing.T) {
 			INSERT INTO photos_photo (id, filename, sha256, timestamp, coordinates_id)
 			VALUES ('21000000-0000-4000-8000-000000000001', '/internal-not-public/cat.jpeg', repeat('a', 64), '2026-01-02T10:30:00+07:00', -22);`,
 			want: []photo{expected}},
+		{name: "without altitude", fixtures: `
+			INSERT INTO photos_location (id, city, country, tzoffset) VALUES (-21, 'Bangkok', 'Thailand', 420);
+			INSERT INTO photos_coordinates (id, location_id, point, altitude)
+			VALUES (-22, -21, ST_GeogFromText('SRID=4326;POINT(100.5 13.75)'), NULL);
+			INSERT INTO photos_photo (id, filename, sha256, timestamp, coordinates_id)
+			VALUES ('21000000-0000-4000-8000-000000000001', '/internal-not-public/cat.jpeg', repeat('a', 64), '2026-01-02T10:30:00+07:00', -22);`,
+			want: []photo{expected}},
 		{name: "without coordinates", fixtures: `
 			INSERT INTO photos_photo (id, filename, sha256, timestamp)
 			VALUES ('21000000-0000-4000-8000-000000000001', '/internal-not-public/cat.jpeg', repeat('a', 64), '2026-01-02T10:30:00+07:00');`,
@@ -164,13 +171,13 @@ func TestPhotosPoolWaitCancellation(t *testing.T) {
 	}
 }
 
-func TestContentDatabaseReadOnly(t *testing.T) {
+func TestContentDatabaseWritesAndReadOnlyTransactions(t *testing.T) {
 	u, err := url.Parse(testDatabaseURL(t))
 	if err != nil || u.Host == "" {
 		t.Fatal("run integration tests with ./scripts/run-tests.sh")
 	}
 	query := u.Query()
-	query.Set("default_transaction_read_only", "off")
+	query.Set("default_transaction_read_only", "on")
 	u.RawQuery = query.Encode()
 	db, err := openContentDatabase(u.String())
 	if err != nil {
@@ -181,13 +188,30 @@ func TestContentDatabaseReadOnly(t *testing.T) {
 	if err := db.QueryRow("SHOW default_transaction_read_only").Scan(&mode); err != nil {
 		t.Fatal(err)
 	}
-	if mode != "on" {
-		t.Fatal("photo connection did not enforce read-only mode")
+	if mode != "off" {
+		t.Fatal("photo connection did not enable writes")
 	}
-	_, err = db.Exec("INSERT INTO photos_location (city, country, tzoffset) VALUES ('must-not-write', 'test', 0)")
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("INSERT INTO photos_location (city, country, tzoffset) VALUES ('upload-write-test', 'test', 0)"); err != nil {
+		t.Fatal("content connection could not write photo data")
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+
+	readTx, err := db.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer readTx.Rollback()
+	_, err = readTx.Exec("INSERT INTO photos_location (city, country, tzoffset) VALUES ('must-not-write', 'test', 0)")
 	var databaseError *pgconn.PgError
 	if !errors.As(err, &databaseError) || databaseError.Code != "25006" {
-		t.Fatal("content connection did not reject a persistent write")
+		t.Fatal("explicitly read-only transaction did not reject a write")
 	}
 	if _, err := openContentDatabase("postgres://reader:fake-private-password@localhost:invalid/photos"); err == nil || strings.Contains(err.Error(), "fake-private-password") {
 		t.Fatal("invalid photo URL did not return a safe configuration error")

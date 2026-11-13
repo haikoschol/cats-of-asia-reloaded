@@ -3,6 +3,8 @@
 set -euo pipefail
 
 node scripts/upload-metadata.test.cjs
+node scripts/upload-transfer.test.cjs
+node scripts/map.test.cjs
 
 echo "Building the application..."
 go build .

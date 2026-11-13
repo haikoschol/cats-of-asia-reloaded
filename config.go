@@ -14,6 +14,7 @@ import (
 )
 
 type config struct {
+	HTTPListenAddr         string `env:"HTTP_LISTEN_ADDR" envDefault:":3000"`
 	DatabaseURL            string `env:"DATABASE_URL"`
 	UsersDatabaseURL       string `env:"USERS_DATABASE_URL"`
 	SessionCookieSecure    bool   `env:"SESSION_COOKIE_SECURE"`
@@ -22,6 +23,8 @@ type config struct {
 	PlausibleScriptURL     string `env:"PLAUSIBLE_SCRIPT_URL"`
 	ImageDomain            string `env:"CLOUDFLARE_IMAGES_DOMAIN"`
 	ImageAccountHash       string `env:"CLOUDFLARE_IMAGES_ACCOUNT_HASH"`
+	ImageAccountID         string `env:"CLOUDFLARE_IMAGES_ACCOUNT_ID"`
+	ImageAPIKey            string `env:"CLOUDFLARE_IMAGES_API_KEY"`
 	MapboxAccessToken      string `env:"MAPBOX_ACCESS_TOKEN"`
 	GoogleGeocodingEnabled bool   `env:"GOOGLE_GEOCODING_ENABLED"`
 	GoogleMapsAPIKey       string `env:"GOOGLE_MAPS_API_KEY"`
@@ -51,9 +54,12 @@ func loadConfigFile(path string) (config, error) {
 		return config{}, fmt.Errorf("cannot parse environment configuration")
 	}
 	cfg.DatabaseURL = strings.TrimSpace(cfg.DatabaseURL)
+	cfg.HTTPListenAddr = strings.TrimSpace(cfg.HTTPListenAddr)
 	cfg.UsersDatabaseURL = strings.TrimSpace(cfg.UsersDatabaseURL)
 	cfg.ImageDomain = strings.TrimSpace(cfg.ImageDomain)
 	cfg.ImageAccountHash = strings.TrimSpace(cfg.ImageAccountHash)
+	cfg.ImageAccountID = strings.TrimSpace(cfg.ImageAccountID)
+	cfg.ImageAPIKey = strings.TrimSpace(cfg.ImageAPIKey)
 	cfg.MapboxAccessToken = strings.TrimSpace(cfg.MapboxAccessToken)
 	cfg.GoogleMapsAPIKey = strings.TrimSpace(cfg.GoogleMapsAPIKey)
 	cfg.PlausibleDomain = strings.ToLower(strings.TrimSpace(cfg.PlausibleDomain))
@@ -64,6 +70,12 @@ func loadConfigFile(path string) (config, error) {
 	}
 	if cfg.UsersDatabaseURL == "" {
 		return config{}, fmt.Errorf("USERS_DATABASE_URL is not set")
+	}
+	host, port, err := net.SplitHostPort(cfg.HTTPListenAddr)
+	portNumber, portErr := strconv.Atoi(port)
+	if err != nil || portErr != nil || portNumber < 1 || portNumber > 65535 ||
+		(host != "" && host != "localhost" && net.ParseIP(host) == nil) {
+		return config{}, fmt.Errorf("HTTP_LISTEN_ADDR must contain an IP address and port, for example 127.0.0.1:3001")
 	}
 	if err := cfg.validatePlausible(); err != nil {
 		return config{}, err

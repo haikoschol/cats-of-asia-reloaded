@@ -1,17 +1,61 @@
 package main
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alexedwards/scs/v2"
 	"golang.org/x/crypto/bcrypt"
 )
+
+func TestUsersDatabaseWaitsForAvailableConnection(t *testing.T) {
+	db, err := openUsersDatabase(testDatabaseURL(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var held []*sql.Conn
+	defer func() {
+		for _, connection := range held {
+			connection.Close()
+		}
+	}()
+	for range 3 {
+		connection, err := db.Conn(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		held = append(held, connection)
+	}
+
+	// Session requests must wait instead of exceeding the shared server budget.
+	waitCtx, stopWaiting := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer stopWaiting()
+	extra, err := db.Conn(waitCtx)
+	if extra != nil {
+		extra.Close()
+	}
+	if !errors.Is(err, context.DeadlineExceeded) || db.Stats().WaitCount == 0 {
+		t.Fatal("a fourth users connection did not wait for an available slot")
+	}
+	if err := held[0].Close(); err != nil {
+		t.Fatal(err)
+	}
+	var result int
+	if err := db.QueryRowContext(ctx, "SELECT 1").Scan(&result); err != nil || result != 1 {
+		t.Fatal("users requests did not recover when a connection became available")
+	}
+}
 
 func testDatabaseURL(t *testing.T) string {
 	t.Helper()

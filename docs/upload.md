@@ -1,83 +1,57 @@
-# Upload preparation
+# Photo upload
 
-Sign in and open **Upload** in the navigation, or visit `/upload`. Anonymous
-visitors are redirected to the login page.
+## Configure
 
-Choose one or more JPEG photos. Each valid file gets its own preview. Further
-selections add to the list; **Remove** removes one item, and **Clear selection**
-removes all items. Leaving the page discards the selection.
+Keep these settings in the server environment or ignored `.env`:
 
-Files must be nonempty JPEG images no larger than 10,000,000 bytes (10 MB).
-The browser checks the JPEG signature and attempts to decode each image.
-Unsupported, oversized, empty, and damaged files show individual errors without
-preventing other previews. Filenames are rendered as text.
+- `CLOUDFLARE_IMAGES_ACCOUNT_ID`: account ID; `CLOUDFLARE_IMAGES_API_KEY`:
+  scoped Images token with Images Write permission.
+- `CLOUDFLARE_IMAGES_DOMAIN` and `CLOUDFLARE_IMAGES_ACCOUNT_HASH`: matching public
+  delivery settings; variants `desktop`, `mobile` and `smol` must exist.
+- Optional location lookup: `GOOGLE_GEOCODING_ENABLED=true` and
+  `GOOGLE_MAPS_API_KEY` for a billing-enabled Geocoding API project.
 
-For each valid image the browser calculates SHA-256 from the complete file
-bytes. It sends only that hash to the protected `/api/photos/exists` endpoint.
-Each card shows the hash and whether that exact file already exists in the
-database. Different files with the same appearance can have different hashes;
-this is not a visual similarity search.
+Prepare database writes/nullable altitude as described in
+[development](development.md#existing-photo-databases). Use HTTPS outside localhost.
 
-Failed checks, expired sessions, invalid responses, and checks taking longer
-than 15 seconds leave the duplicate status unknown, with a **Retry duplicate
-check** button. They are never treated as confirmation that a photo is new.
-Removing a photo or clearing the selection cancels its current request.
-Preview and hash preparation continue independently of these network checks,
-so a slow response does not hold up previews for the remaining selection.
+## Use
 
-## Capture metadata
+1. Sign in and open `/upload`.
+2. Select original JPEGs, at most 10 MB each. Review previews, City and Country;
+   select a suggested city when offered. Selection alone does not upload images.
+3. Choose **Upload**, wait for **Saved**, then open **View on map**.
 
-Each preview shows latitude, longitude, altitude, capture time, and the stored
-UTC offset. EXIF is read locally using the bundled exifr 7.1.3 lite build; it
-does not require a CDN request. Metadata is not sent to the server at this step.
+Required EXIF: valid GPS, original capture time and its explicit UTC offset.
+Altitude is optional. Missing values are never guessed; time editing and GPS-time
+fallback are not implemented. Phone pickers/sharing may remove location data.
 
-Missing or invalid GPS or capture time blocks upload preparation with a clear
-message. No coordinates, current date, browser timezone, or altitude of zero
-are substituted. Altitude is optional: missing or invalid altitude or altitude
-reference is shown as unknown; an explicit zero remains zero and below-sea-level
-references become negative values.
+On failure, keep the page open and retry. A completed Cloudflare upload retains
+its image ID; retrying the metadata save does not upload the image again.
+Reloading/closing the page loses retry state; signing in again starts a new
+upload session.
 
-Original capture time (`DateTimeOriginal`, including numeric key `36867`) takes
-priority. `CreateDate` is displayed as digitization time when capture time is
-absent, but requires confirmation before upload. `ModifyDate` is never used as
-capture time. Dates are validated without calendar rollover.
+Abandoned images are not deleted automatically. Before manually removing one
+from Cloudflare, check that no application/database sharing that Images account
+references its ID, including the original site and test databases.
 
-When EXIF contains no valid matching UTC offset, the original wall-clock time
-is preserved, its timezone remains unknown, and preparation is blocked until
-it is confirmed. The browser's timezone is never assumed. The current page
-shows what needs correction; editing and actual upload are not implemented yet.
-A malformed EXIF block produces a per-file error while previewing, hashing,
-duplicate checks, and other selected photos remain usable.
+## API
 
-Selected files stay in the browser. This step does not upload image files.
-JavaScript and Web Crypto (HTTPS or localhost) are required. A future upload
-endpoint must validate files and capture data again on the server and enforce
-duplicate prevention when saving.
+Both actions require login and `X-CSRF-Token`:
 
-## Verification
+- `POST /api/photos/upload-url`: no body; returns 201 with `id`, `uploadURL` and
+  `expiresAt`. The URL expires after 30 minutes. Send the JPEG as multipart field
+  `file` directly to it, without app cookies or CSRF headers.
+- `POST /api/photos/save`: JSON, at most 256 KiB. Fields: `id`, `filename`,
+  `sha256`, `latitude`, `longitude`, optional `altitude`, `city`, `country`,
+  `captureTime` (`YYYY-MM-DD HH:MM:SS`), `timeSource` (`DateTimeOriginal`),
+  `utcOffset` (`+/-HH:MM`), matching UTC `timestamp` and parsed EXIF object `raw`.
+  Raw original time/offset must agree with those fields.
 
-Run `./scripts/run-tests.sh` from the repository root for metadata tests plus
-route, authentication, navigation, and embedded-asset checks against the
-isolated test database. Node.js 22 or later is needed for the built-in test
-runner; no npm dependencies need installing. To run just the metadata tests:
+The server verifies upload completion and ownership by the current login session,
+then saves photo, place, coordinates and EXIF in one transaction. New saves return
+201; identical retries return 200 with `alreadySaved:true`. Conflicts return 409,
+invalid metadata 422. Incomplete images return 409 with `code:image_incomplete`.
+Database errors roll back the save and preserve the image for retry.
 
-```bash
-node scripts/upload-metadata.test.cjs
-```
-
-The tests use real synthetic JPEGs in `testdata/upload`, including the numeric
-EXIF key `36867`, missing values, corrupted EXIF, below-sea-level altitude, and
-timezone independence. These files can also be selected on the upload page for
-manual checks. See their README for the expected data in each image.
-
-For browser checks, start the app as described in the README, sign in, and open
-**Upload**. Select several JPEGs, remove one, clear the selection, then choose
-the same files again. Also try a damaged JPEG, an empty file, a non-JPEG renamed
-to `.jpg`, and a file larger than 10 MB. Each should show its own error while
-valid previews remain usable. Check the page at a narrow viewport as well.
-
-For duplicate checks, select an unchanged local copy of an image already in
-the database, plus a new image. Expect **Duplicate** on the existing file and
-**not found** on the new one. Compare the displayed hash with `sha256sum` if
-needed. A server or connection failure should preserve the preview, show an
-unknown duplicate status, and allow retrying after the problem is resolved.
+Implementation reference:
+[Cloudflare Direct Creator Upload](https://developers.cloudflare.com/images/storage/upload-images/direct-creator-upload/).

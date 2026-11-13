@@ -16,6 +16,9 @@
 .upload-controls input,
 .upload-controls button,
 .upload-retry,
+.upload-location input,
+.upload-location select,
+.upload-location button,
 .upload-remove {
   box-sizing: border-box;
   max-width: 100%;
@@ -39,6 +42,7 @@
 
 .upload-controls button,
 .upload-retry,
+.upload-location button,
 .upload-remove {
   border: 1px solid #777;
   border-radius: 4px;
@@ -47,7 +51,10 @@
   cursor: pointer;
 }
 
-.upload-controls button:disabled {
+.upload-controls button:disabled,
+.upload-remove:disabled,
+.upload-retry:disabled,
+.upload-location button:disabled {
   cursor: default;
   opacity: 0.6;
 }
@@ -106,6 +113,53 @@
   font-size: 0.8rem;
 }
 
+.upload-location,
+.upload-location fieldset,
+.upload-candidates {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.upload-location[hidden],
+.upload-candidates[hidden] {
+  display: none;
+}
+
+.upload-location fieldset {
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid #aaa;
+}
+
+.upload-location legend {
+  font-weight: bold;
+}
+
+.upload-location input,
+.upload-location select {
+  width: 100%;
+  min-width: 0;
+  color: #111;
+  background: #fff;
+  border: 1px solid #777;
+  border-radius: 4px;
+}
+
+.upload-location input {
+  scroll-margin: 1rem;
+}
+
+.upload-location input:disabled,
+.upload-location select:disabled {
+  color: #444;
+  background: #eee;
+}
+
+.upload-map-link {
+  color: #005d0b;
+}
+
 .upload-metadata h3,
 .upload-metadata dl {
   margin: 0 0 0.75rem;
@@ -130,6 +184,10 @@
 .upload-controls input:focus-visible,
 .upload-controls button:focus-visible,
 .upload-retry:focus-visible,
+.upload-location input:focus-visible,
+.upload-location select:focus-visible,
+.upload-location button:focus-visible,
+.upload-map-link:focus-visible,
 .upload-remove:focus-visible {
   outline: 3px solid #2276c9;
   outline-offset: 2px;
