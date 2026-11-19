@@ -1,5 +1,16 @@
 # Development
 
+## Development environment
+
+Run `devenv shell` from the repository root for Go 1.27.4 and Node.js 24.
+With only Nix installed, use `nix run github:NixOS/nixpkgs/nixpkgs-unstable#devenv -- shell`.
+`devenv.lock` pins the inputs for both tools; update it
+deliberately with `devenv update`. `GOTOOLCHAIN=local` prevents Go from downloading
+a different toolchain automatically.
+
+Docker Compose and the existing scripts still manage services. The application
+reads its own `.env`. Run `./scripts/run.sh` inside `devenv shell`.
+
 ## Configuration
 
 Settings are listed in [.env.example](../.env.example). Environment variables
@@ -78,8 +89,15 @@ or invalid CSRF returns 403. See [upload details](upload.md#api).
 
 ## Tests, builds and deployment
 
-The [test runner](../scripts/run-tests.sh) uses a disposable PostGIS database on
-port 5433 for both connections and removes its own test volume afterward.
+Plain `go test ./...` runs only tests that work in memory. Go test files use
+`!integration` for unit tests and `integration` for tests that use files,
+loopback HTTP, subprocesses or the test database.
+
+The [test runner](../scripts/run-tests.sh) runs the whole suite by default
+(including in CI). For integration tests, it runs the JavaScript checks first,
+then starts disposable PostGIS on port 5433 and runs the Go integration suite
+with `go test -tags integration ./...`. Both database connections point at
+that instance, and the runner removes its test volume.
 Provider calls are substituted; automated tests do not upload real images.
 [EXIF fixtures](../testdata/upload/README.md) can also be used for manual checks.
 Phone file selection and real provider delivery need browser/device checks.
@@ -90,7 +108,11 @@ Vendored asset provenance/licenses are retained with
 [exifr](../static/vendor/exifr/README.md) and
 [Mapbox](../static/vendor/mapbox/README.md).
 
-[GitHub CI](../.github/workflows/release.yml) tests PRs and main. After successful
-main tests it publishes a Linux amd64 release named `coa-<commit-prefix>`.
+[GitHub CI](../.github/workflows/release.yml) runs `app:test` on PRs and main.
+After successful main tests it runs `app:release`, then publishes
+`coa-<commit-prefix>`. To build the Linux amd64 binary and SHA-256 checksum
+locally without publishing, run `devenv tasks run app:release` and look in
+`dist/`. Release filenames use the checked-out commit; use a clean checkout
+to reproduce a published build.
 Deployment is separate; use
 [cats-of-asia-infra](https://github.com/haikoschol/cats-of-asia-infra).

@@ -2,6 +2,24 @@
 
 set -euo pipefail
 
+suite="${1:-all}"
+if (( $# > 1 )); then
+  echo "Usage: $0 [unit|integration|all]" >&2
+  exit 2
+fi
+case "$suite" in
+  unit|integration|all) ;;
+  *) echo "Usage: $0 [unit|integration|all]" >&2; exit 2 ;;
+esac
+
+if [[ "$suite" != integration ]]; then
+  go test -count=1 ./...
+fi
+
+if [[ "$suite" == unit ]]; then
+  exit 0
+fi
+
 node scripts/upload-metadata.test.cjs
 node scripts/upload-transfer.test.cjs
 node scripts/map.test.cjs

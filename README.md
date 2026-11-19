@@ -4,7 +4,7 @@ A small cat photo website built with Go, PostgreSQL/PostGIS and plain JavaScript
 
 ## Requirements
 
-- Go 1.27+, Node.js 22+ (tests only; no npm install)
+- [Nix and devenv](https://devenv.sh/getting-started/) for pinned Go and Node.js
 - Docker with Compose v2 supporting `up --wait --wait-timeout`
 - AMD64 container support, including emulation on Apple Silicon
 
@@ -13,8 +13,11 @@ A small cat photo website built with Go, PostgreSQL/PostGIS and plain JavaScript
 ```sh
 git clone git@github.com:haikoschol/cats-of-asia-reloaded.git
 cd cats-of-asia-reloaded
+devenv shell
 cp .env.example .env
 ```
+
+Build without starting services: `devenv tasks run app:build`.
 
 Edit `.env`:
 
@@ -36,8 +39,10 @@ Keep credentials in the ignored `.env` file.
 ## Tests
 
 ```sh
-./scripts/run-tests.sh
+devenv tasks run app:test
 ```
+
+Run only one group with `app:test:unit` or `app:test:integration`.
 
 Further guidance: [development](docs/development.md), [uploads](docs/upload.md),
 [analytics](docs/analytics.md).

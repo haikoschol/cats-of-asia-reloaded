@@ -1,3 +1,5 @@
+//go:build integration
+
 package main
 
 import (
@@ -85,7 +87,8 @@ func TestRunTestsUsesIsolatedConnection(t *testing.T) {
 [ "$USERS_DATABASE_URL" = "$EXPECTED_TEST_DATABASE_URL" ] || exit 1
 [ "$CATS_TEST_DATABASE_URL" = "$EXPECTED_TEST_DATABASE_URL" ] || exit 1
 [ "$PLAUSIBLE_ENABLED" = false ] || exit 1
-[ "$1" = test ] && [ "$2" = -count=1 ] && [ "$3" = ./... ]
+[ "$#" -eq 5 ] && [ "$1" = test ] && [ "$2" = -count=1 ] &&
+  [ "$3" = -tags ] && [ "$4" = integration ] && [ "$5" = ./... ]
 `
 	if err := os.WriteFile(filepath.Join(dir, "go"), []byte(program), 0o700); err != nil {
 		t.Fatal(err)
