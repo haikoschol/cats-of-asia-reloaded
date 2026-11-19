@@ -17,7 +17,7 @@ devenv shell
 cp .env.example .env
 ```
 
-Build without starting services: `devenv shell -- go build .`.
+Build without starting services: `devenv tasks run app:build`.
 
 Edit `.env`:
 
@@ -38,11 +38,11 @@ Keep credentials in the ignored `.env` file.
 
 ## Tests
 
-Inside `devenv shell`:
-
 ```sh
-./scripts/run-tests.sh
+devenv tasks run app:test
 ```
+
+Run only one group with `app:test:unit` or `app:test:integration`.
 
 Further guidance: [development](docs/development.md), [uploads](docs/upload.md),
 [analytics](docs/analytics.md).

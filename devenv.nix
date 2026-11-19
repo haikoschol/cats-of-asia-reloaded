@@ -11,6 +11,13 @@
 
   env.GOTOOLCHAIN = "local";
 
+  tasks = {
+    "app:build".exec = "go build .";
+    "app:test:unit".exec = "./scripts/run-tests.sh unit";
+    "app:test:integration".exec = "./scripts/run-tests.sh integration";
+    "app:test".exec = "./scripts/run-tests.sh";
+  };
+
   # The Go application and Docker Compose already read .env.
   dotenv.disableHint = true;
 }

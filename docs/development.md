@@ -8,9 +8,8 @@ With only Nix installed, use `nix run github:NixOS/nixpkgs/nixpkgs-unstable#deve
 deliberately with `devenv update`. `GOTOOLCHAIN=local` prevents Go from downloading
 a different toolchain automatically.
 
-This first migration step supplies the language tools. Docker Compose, the
-existing run/test scripts and the application's `.env` loading still manage
-services and configuration. Run those scripts inside `devenv shell`.
+Docker Compose and the existing scripts still manage services. The application
+reads its own `.env`. Run `./scripts/run.sh` inside `devenv shell`.
 
 ## Configuration
 
@@ -90,8 +89,15 @@ or invalid CSRF returns 403. See [upload details](upload.md#api).
 
 ## Tests, builds and deployment
 
-The [test runner](../scripts/run-tests.sh) uses a disposable PostGIS database on
-port 5433 for both connections and removes its own test volume afterward.
+Plain `go test ./...` runs only tests that work in memory. Go test files use
+`!integration` for unit tests and `integration` for tests that use files,
+loopback HTTP, subprocesses or the test database.
+
+The [test runner](../scripts/run-tests.sh) runs the whole suite by default
+(including in CI). For integration tests, it runs the JavaScript checks first,
+then starts disposable PostGIS on port 5433 and runs the Go integration suite
+with `go test -tags integration ./...`. Both database connections point at
+that instance, and the runner removes its test volume.
 Provider calls are substituted; automated tests do not upload real images.
 [EXIF fixtures](../testdata/upload/README.md) can also be used for manual checks.
 Phone file selection and real provider delivery need browser/device checks.

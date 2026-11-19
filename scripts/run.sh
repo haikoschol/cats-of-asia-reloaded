@@ -3,7 +3,7 @@
 set -e
 
 echo "Building the application..."
-go build .
+devenv tasks run app:build
 
 ./cats-of-asia-reloaded prepare-local
 

@@ -48,7 +48,7 @@ func runTests(cfg config, port string) error {
 	if err != nil {
 		return err
 	}
-	command := exec.Command("go", "test", "-count=1", "./...")
+	command := exec.Command("go", "test", "-count=1", "-tags", "integration", "./...")
 	for _, assignment := range os.Environ() {
 		if !strings.HasPrefix(assignment, "DATABASE_URL=") &&
 			!strings.HasPrefix(assignment, "USERS_DATABASE_URL=") &&

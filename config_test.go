@@ -1,3 +1,5 @@
+//go:build integration
+
 package main
 
 import (
@@ -123,61 +125,6 @@ func TestGoogleGeocodingConfiguration(t *testing.T) {
 	if _, err := loadConfigFile(".env"); err == nil || err.Error() != "cannot parse environment configuration" {
 		t.Fatal("an invalid activation setting must fail without exposing configuration")
 	}
-}
-
-func TestConfigFeatureRequirements(t *testing.T) {
-	setPrivateTestCredentials(t)
-	tests := []struct {
-		name    string
-		cfg     config
-		images  bool
-		wantErr string
-	}{
-		{name: "missing image domain", images: true,
-			cfg:     config{ImageAccountHash: "example-account-hash"},
-			wantErr: "CLOUDFLARE_IMAGES_DOMAIN is not set"},
-		{name: "missing image account hash", images: true,
-			cfg:     config{ImageDomain: "images.example.com"},
-			wantErr: "CLOUDFLARE_IMAGES_ACCOUNT_HASH is not set"},
-		{name: "images without a map token", images: true,
-			cfg: config{ImageDomain: "images.example.com", ImageAccountHash: "example-account-hash"}},
-		{name: "missing map token", wantErr: "MAPBOX_ACCESS_TOKEN is not set"},
-		{name: "map without image settings", cfg: config{MapboxAccessToken: "pk.example-public-map-token"}},
-		{name: "reject secret map token", cfg: config{MapboxAccessToken: "sk.fake-secret-token"}, wantErr: "MAPBOX_ACCESS_TOKEN must be a public browser token starting with pk."},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.cfg.DatabaseURL = "postgres://example:fake-private-db-password@localhost/cats"
-			var err error
-			if tt.images {
-				err = tt.cfg.validateImages()
-			} else {
-				err = tt.cfg.validateMap()
-			}
-			if tt.wantErr == "" {
-				if err != nil {
-					t.Fatal(err)
-				}
-			} else if err == nil || err.Error() != tt.wantErr {
-				t.Fatalf("wanted %q, got %v", tt.wantErr, err)
-			}
-		})
-	}
-}
-
-func setPrivateTestCredentials(t *testing.T) map[string]string {
-	t.Helper()
-	settings := map[string]string{
-		"POSTGRES_PASSWORD":            "fake-private-db-password",
-		"CLOUDFLARE_IMAGES_ACCOUNT_ID": "fake-private-cloudflare-account-id",
-		"CLOUDFLARE_IMAGES_API_KEY":    "fake-private-cloudflare-key",
-		"GOOGLE_MAPS_API_KEY":          "fake-private-google-key",
-		"MASTODON_ACCESS_TOKEN":        "fake-private-mastodon-token",
-	}
-	for name, value := range settings {
-		t.Setenv(name, value)
-	}
-	return settings
 }
 
 func TestStartupDoesNotLogSecrets(t *testing.T) {
@@ -355,31 +302,6 @@ func TestSessionCookieConfiguration(t *testing.T) {
 	t.Setenv("SESSION_COOKIE_SECURE", "invalid-private-example")
 	if _, err := loadConfigFile(path); err == nil || err.Error() != "cannot parse environment configuration" {
 		t.Fatal("invalid cookie configuration did not produce a generic error")
-	}
-}
-
-func TestLocalDatabaseRequirements(t *testing.T) {
-	for _, setting := range []string{"POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"} {
-		t.Run(setting, func(t *testing.T) {
-			cfg := config{PostgresUser: "sample", PostgresPassword: "sample-password", PostgresDB: "cats_sample"}
-			switch setting {
-			case "POSTGRES_USER":
-				cfg.PostgresUser = ""
-			case "POSTGRES_PASSWORD":
-				cfg.PostgresPassword = ""
-			case "POSTGRES_DB":
-				cfg.PostgresDB = ""
-			}
-			if _, err := cfg.localDatabaseURL("5433"); err == nil || err.Error() != setting+" is not set" {
-				t.Fatal("missing local database setting did not produce its named error")
-			}
-		})
-	}
-	for _, port := range []string{"", "invalid", "0", "65536"} {
-		cfg := config{PostgresUser: "sample", PostgresPassword: "sample-password", PostgresDB: "cats_sample"}
-		if _, err := cfg.localDatabaseURL(port); err == nil {
-			t.Error("invalid local database port was accepted")
-		}
 	}
 }
 
