@@ -108,7 +108,11 @@ Vendored asset provenance/licenses are retained with
 [exifr](../static/vendor/exifr/README.md) and
 [Mapbox](../static/vendor/mapbox/README.md).
 
-[GitHub CI](../.github/workflows/release.yml) tests PRs and main. After successful
-main tests it publishes a Linux amd64 release named `coa-<commit-prefix>`.
+[GitHub CI](../.github/workflows/release.yml) runs `app:test` on PRs and main.
+After successful main tests it runs `app:release`, then publishes
+`coa-<commit-prefix>`. To build the Linux amd64 binary and SHA-256 checksum
+locally without publishing, run `devenv tasks run app:release` and look in
+`dist/`. Release filenames use the checked-out commit; use a clean checkout
+to reproduce a published build.
 Deployment is separate; use
 [cats-of-asia-infra](https://github.com/haikoschol/cats-of-asia-infra).
