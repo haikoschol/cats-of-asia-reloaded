@@ -23,8 +23,7 @@ Edit `.env`:
 
 - Set `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` for the local database.
 - Set `USERS_DATABASE_URL` to match those credentials on `localhost:5432`.
-- Obtain `DATABASE_URL` for the photo database from its owner, or point it at the
-  local database too. Uploads require write permissions.
+- Leave `DATABASE_URL` unset or blank to use the local database for photos and uploads.
 - Set a public `MAPBOX_ACCESS_TOKEN` (`pk.`) and the Cloudflare delivery settings
   to display maps and photos. The example values are placeholders.
 

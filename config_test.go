@@ -51,8 +51,9 @@ func TestLoadConfig(t *testing.T) {
 
 	for _, value := range []string{"", " \t\n"} {
 		t.Setenv("DATABASE_URL", value)
-		if _, err := loadConfigFile(".env"); err == nil || err.Error() != "DATABASE_URL is not set" {
-			t.Fatalf("wanted a missing DATABASE_URL error, got %v", err)
+		cfg, err := loadConfigFile(".env")
+		if err != nil || cfg.DatabaseURL != want.UsersDatabaseURL {
+			t.Fatal("blank DATABASE_URL did not fall back to USERS_DATABASE_URL")
 		}
 	}
 }
@@ -132,7 +133,6 @@ func TestStartupDoesNotLogSecrets(t *testing.T) {
 	const contentURL = "postgres://reader:fake-private-db-password@content.example/photos"
 	const usersURL = "postgres://writer:fake-private-db-password@users.example/users"
 	tests := []struct{ name, databaseURL, usersURL, wantMessage, dotenv string }{
-		{name: "missing content URL", usersURL: usersURL, wantMessage: "DATABASE_URL is not set"},
 		{name: "missing users URL", databaseURL: contentURL, wantMessage: "USERS_DATABASE_URL is not set"},
 		{name: "invalid content URL", databaseURL: "postgres://reader:fake-private-db-password@localhost:invalid/photos", usersURL: usersURL, wantMessage: "cannot parse DATABASE_URL"},
 		{name: "invalid users URL", databaseURL: contentURL, usersURL: "postgres://writer:fake-private-db-password@localhost:invalid/users", wantMessage: "cannot parse USERS_DATABASE_URL"},
@@ -249,6 +249,11 @@ MAPBOX_ACCESS_TOKEN=file-map-token
 	if cfg.UsersDatabaseURL != "postgres://writer:example@override.example/users" {
 		t.Fatal(".env overwrote the explicit users URL")
 	}
+	t.Setenv("DATABASE_URL", "")
+	cfg, err = loadConfigFile(".env")
+	if err != nil || cfg.DatabaseURL != cfg.UsersDatabaseURL {
+		t.Fatal("blank DATABASE_URL did not override the .env photo URL and fall back to the users URL")
+	}
 	t.Setenv("USERS_DATABASE_URL", "")
 	if _, err := loadConfigFile(".env"); err == nil || err.Error() != "USERS_DATABASE_URL is not set" {
 		t.Fatal("an explicitly empty users URL did not fail validation")
@@ -261,7 +266,6 @@ func TestDatabaseURLInterpolation(t *testing.T) {
 	content := `POSTGRES_USER=sample
 POSTGRES_PASSWORD=sample-password
 POSTGRES_DB=cats_sample
-DATABASE_URL=postgres://reader:example@content.example/photos
 USERS_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}?sslmode=disable
 `
 	if err := os.WriteFile(".env", []byte(content), 0o600); err != nil {
@@ -273,6 +277,9 @@ USERS_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:54
 	}
 	if cfg.UsersDatabaseURL != "postgres://sample:sample-password@localhost:5432/cats_sample?sslmode=disable" {
 		t.Fatal("explicit USERS_DATABASE_URL interpolation stopped working")
+	}
+	if cfg.DatabaseURL != cfg.UsersDatabaseURL {
+		t.Fatal("omitting DATABASE_URL did not use the interpolated users URL")
 	}
 }
 
@@ -305,21 +312,15 @@ func TestSessionCookieConfiguration(t *testing.T) {
 	}
 }
 
-func TestDatabaseURLsMustBeExplicit(t *testing.T) {
-	for _, missing := range []string{"DATABASE_URL", "USERS_DATABASE_URL"} {
-		t.Run(missing, func(t *testing.T) {
-			clearConfigEnvironment(t)
-			t.Setenv("POSTGRES_USER", "sample")
-			t.Setenv("POSTGRES_PASSWORD", "sample-password")
-			t.Setenv("POSTGRES_DB", "cats_sample")
-			t.Setenv("DATABASE_URL", "postgres://reader:example@content.example/photos")
-			t.Setenv("USERS_DATABASE_URL", "postgres://writer:example@localhost/users")
-			t.Setenv(missing, " \t\n")
-			_, err := loadConfigFile(filepath.Join(t.TempDir(), ".env"))
-			if err == nil || err.Error() != missing+" is not set" {
-				t.Fatal("database URL was not required explicitly")
-			}
-		})
+func TestUsersDatabaseURLMustBeExplicit(t *testing.T) {
+	clearConfigEnvironment(t)
+	t.Setenv("POSTGRES_USER", "sample")
+	t.Setenv("POSTGRES_PASSWORD", "sample-password")
+	t.Setenv("POSTGRES_DB", "cats_sample")
+	t.Setenv("DATABASE_URL", "postgres://reader:example@content.example/photos")
+	_, err := loadConfigFile(filepath.Join(t.TempDir(), ".env"))
+	if err == nil || err.Error() != "USERS_DATABASE_URL is not set" {
+		t.Fatal("users database URL was not required explicitly")
 	}
 }
 

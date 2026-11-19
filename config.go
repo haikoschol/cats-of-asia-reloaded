@@ -65,11 +65,11 @@ func loadConfigFile(path string) (config, error) {
 	cfg.PlausibleDomain = strings.ToLower(strings.TrimSpace(cfg.PlausibleDomain))
 	cfg.PlausibleScriptURL = strings.TrimSpace(cfg.PlausibleScriptURL)
 
-	if cfg.DatabaseURL == "" {
-		return config{}, fmt.Errorf("DATABASE_URL is not set")
-	}
 	if cfg.UsersDatabaseURL == "" {
 		return config{}, fmt.Errorf("USERS_DATABASE_URL is not set")
+	}
+	if cfg.DatabaseURL == "" {
+		cfg.DatabaseURL = cfg.UsersDatabaseURL
 	}
 	host, port, err := net.SplitHostPort(cfg.HTTPListenAddr)
 	portNumber, portErr := strconv.Atoi(port)

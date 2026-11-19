@@ -14,10 +14,13 @@ reads its own `.env`. Run `./scripts/run.sh` inside `devenv shell`.
 ## Configuration
 
 Settings are listed in [.env.example](../.env.example). Environment variables
-override `.env`; both database URLs are required.
+override `.env`.
 
-- `DATABASE_URL`: photo data and Places. Uploads need table/sequence write access.
-- `USERS_DATABASE_URL`: users and sessions; normally the local Docker database.
+- `USERS_DATABASE_URL` (required): users and sessions; normally the local Docker database.
+- `DATABASE_URL` (optional): overrides where the app reads and writes photos and
+  Places. Leave it unset or blank to use `USERS_DATABASE_URL`, including for
+  manual upload checks. Use a separate read-only role when manually checking
+  against production photo data. Automated tests use disposable PostGIS.
 - `HTTP_LISTEN_ADDR`: defaults to `:3000`.
 - `SESSION_COOKIE_SECURE`: `false` for local HTTP, `true` behind production HTTPS.
 - Image/map settings: public delivery domain/hash and a public Mapbox token.
