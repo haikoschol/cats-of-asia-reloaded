@@ -1,5 +1,17 @@
 # Development
 
+## Development environment
+
+Run `devenv shell` from the repository root for Go 1.27.4 and Node.js 24.
+With only Nix installed, use `nix run github:NixOS/nixpkgs/nixpkgs-unstable#devenv -- shell`.
+`devenv.lock` pins the inputs for both tools; update it
+deliberately with `devenv update`. `GOTOOLCHAIN=local` prevents Go from downloading
+a different toolchain automatically.
+
+This first migration step supplies the language tools. Docker Compose, the
+existing run/test scripts and the application's `.env` loading still manage
+services and configuration. Run those scripts inside `devenv shell`.
+
 ## Configuration
 
 Settings are listed in [.env.example](../.env.example). Environment variables
