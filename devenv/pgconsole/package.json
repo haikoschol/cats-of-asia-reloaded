@@ -1,0 +1,12 @@
+{
+  "name": "cats-of-asia-pgconsole",
+  "private": true,
+  "dependencies": {
+    "@electric-sql/pglite": "^0.3.15",
+    "@electric-sql/pglite-socket": "^0.0.20",
+    "@libpg-query/parser": "~17.7.0",
+    "express": "^5.2.1",
+    "pg": "^8.16.3",
+    "postgres": "^3.4.7"
+  }
+}

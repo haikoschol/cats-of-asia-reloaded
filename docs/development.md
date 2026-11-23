@@ -43,8 +43,10 @@ devenv shell -- ./scripts/run.sh create-user USERNAME
 Enter the password twice at the hidden prompts, then sign in at `/login`.
 There is no public signup or password-change screen.
 
-Inspect the local database with `devenv shell -- psql -d cats`. Normal startup
-adds no sample photos or places. To load photos from an archive, run
+Inspect the local database in [pgconsole](http://127.0.0.1:3001/) while
+`devenv up` is running, or use `devenv shell -- psql -d cats`. Pgconsole
+connects only to the local `cats` database. Normal startup adds no sample photos
+or places. To load photos from an archive, run
 `devenv shell -- ./scripts/import-db-dump.sh path/to/backup.dump`.
 
 The old Docker volume `postgres18-data` is retained. Data is not moved

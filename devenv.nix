@@ -1,12 +1,15 @@
 { inputs, pkgs, ... }:
 
+let
+  pgconsole = pkgs.callPackage ./devenv/pgconsole { };
+in
 {
   packages = [
     (inputs.go-overlay.lib.mkGoBin pkgs).versions."1.27.4"
     pkgs.jq
   ];
 
-  # Plain JavaScript; Node.js is only needed for the existing tests.
+  # Plain JavaScript; no frontend build is needed.
   languages.javascript = {
     enable = true;
     package = pkgs.nodejs_24;
@@ -27,6 +30,28 @@
   processes.app = {
     exec = "./scripts/run.sh";
     after = [ "devenv:processes:postgres@ready" ];
+  };
+
+  processes.pgconsole = {
+    after = [ "devenv:processes:postgres@ready" ];
+    exec = ''
+      PGCONSOLE_CONFIG="$(
+        jq -nr --arg host "$DEVENV_RUNTIME/postgres" --arg user "$(id -un)" \
+          --arg port "$PGPORT" '[
+            "[[connections]]",
+            "id = \"cats\"",
+            "name = \"Cats of Asia local\"",
+            "database = \"cats\"",
+            "host = \($host | @json)",
+            "port = \($port | tonumber)",
+            "username = \($user | @json)",
+            "ssl_mode = \"disable\""
+          ] | join("\n")'
+      )"
+      export PGCONSOLE_CONFIG
+      unset PGHOST PGPORT PGUSER PGDATABASE PGPASSWORD PGSSLMODE
+      exec ${pgconsole}/bin/pgconsole --port 3001
+    '';
   };
 
   tasks = {
