@@ -8,15 +8,18 @@ With only Nix installed, use `nix run github:NixOS/nixpkgs/nixpkgs-unstable#deve
 deliberately with `devenv update`. `GOTOOLCHAIN=local` prevents Go from downloading
 a different toolchain automatically.
 
-Docker Compose and the existing scripts still manage services. The application
-reads its own `.env`. Run `./scripts/run.sh` inside `devenv shell`.
+`devenv up` starts PostgreSQL 18 with PostGIS, applies the schema to the local
+`cats` database, then runs the app. Postgres listens on a project Unix socket
+and uses your OS user via peer authentication. Its data persists under
+`$DEVENV_STATE/postgres`.
 
 ## Configuration
 
 Settings are listed in [.env.example](../.env.example). Environment variables
 override `.env`.
 
-- `USERS_DATABASE_URL` (required): users and sessions; normally the local Docker database.
+- `USERS_DATABASE_URL`: users and sessions. `devenv up` supplies the local socket
+  URL. Set it explicitly when running the binary outside this workflow.
 - `DATABASE_URL` (optional): overrides where the app reads and writes photos and
   Places. Leave it unset or blank to use `USERS_DATABASE_URL`, including for
   manual upload checks. Use a separate read-only role when manually checking
@@ -31,27 +34,22 @@ URL-encode special characters in database credentials.
 
 ## Local accounts and database
 
-Replace `USERNAME` with your chosen login name:
+With `devenv up` running, replace `USERNAME` with your chosen login name:
 
 ```sh
-./scripts/run.sh create-user USERNAME
+devenv shell -- ./scripts/run.sh create-user USERNAME
 ```
 
-Enter the password twice at the hidden prompts. The account is created in
-`USERS_DATABASE_URL`; restart `./scripts/run.sh` and sign in at `/login`.
+Enter the password twice at the hidden prompts, then sign in at `/login`.
 There is no public signup or password-change screen.
 
-While the development script runs, [pgconsole](http://localhost:3001/) shows the
-local database. External photo data must be inspected through its own connection.
-The startup script applies [schema.sql](../scripts/schema.sql) only to the local
-Docker database. Normal startup adds no sample photos or places.
+Inspect the local database with `devenv shell -- psql -d cats`. Normal startup
+adds no sample photos or places. To load photos from an archive, run
+`devenv shell -- ./scripts/import-db-dump.sh path/to/backup.dump`.
 
-Do not delete the development volume `postgres18-data` to troubleshoot a problem.
-Older PostgreSQL 17 data is not imported automatically; back up and restore it
-before using the new database, and retain the old volume until verified.
-
-For older `.env` files: rename the former local `DATABASE_URL` to
-`USERS_DATABASE_URL`, and `PHOTOS_DATABASE_URL` to `DATABASE_URL`.
+The old Docker volume `postgres18-data` is retained. Data is not moved
+automatically. If you need it, dump the old database and restore it into the
+new one. Remove obsolete `POSTGRES_*` settings from your local `.env`.
 
 ## Existing photo databases
 
@@ -98,9 +96,9 @@ loopback HTTP, subprocesses or the test database.
 
 The [test runner](../scripts/run-tests.sh) runs the whole suite by default
 (including in CI). For integration tests, it runs the JavaScript checks first,
-then starts disposable PostGIS on port 5433 and runs the Go integration suite
+then starts disposable PostGIS on a private Unix socket and runs the Go suite
 with `go test -tags integration ./...`. Both database connections point at
-that instance, and the runner removes its test volume.
+that instance, and the runner removes its temporary data directory.
 Provider calls are substituted; automated tests do not upload real images.
 [EXIF fixtures](../testdata/upload/README.md) can also be used for manual checks.
 Phone file selection and real provider delivery need browser/device checks.

@@ -44,28 +44,3 @@ func TestConfigFeatureRequirements(t *testing.T) {
 		})
 	}
 }
-
-func TestLocalDatabaseRequirements(t *testing.T) {
-	for _, setting := range []string{"POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"} {
-		t.Run(setting, func(t *testing.T) {
-			cfg := config{PostgresUser: "sample", PostgresPassword: "sample-password", PostgresDB: "cats_sample"}
-			switch setting {
-			case "POSTGRES_USER":
-				cfg.PostgresUser = ""
-			case "POSTGRES_PASSWORD":
-				cfg.PostgresPassword = ""
-			case "POSTGRES_DB":
-				cfg.PostgresDB = ""
-			}
-			if _, err := cfg.localDatabaseURL("5433"); err == nil || err.Error() != setting+" is not set" {
-				t.Fatal("missing local database setting did not produce its named error")
-			}
-		})
-	}
-	for _, port := range []string{"", "invalid", "0", "65536"} {
-		cfg := config{PostgresUser: "sample", PostgresPassword: "sample-password", PostgresDB: "cats_sample"}
-		if _, err := cfg.localDatabaseURL(port); err == nil {
-			t.Error("invalid local database port was accepted")
-		}
-	}
-}

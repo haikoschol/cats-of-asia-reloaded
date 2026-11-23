@@ -3,7 +3,6 @@
 package main
 
 import (
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,7 +34,6 @@ func TestLoadConfig(t *testing.T) {
 		ImageAPIKey:       "fake-private-cloudflare-key",
 		MapboxAccessToken: "example-public-map-token",
 		GoogleMapsAPIKey:  "fake-private-google-key",
-		PostgresPassword:  "fake-private-db-password",
 	}
 	if cfg != want {
 		t.Fatal("configuration did not match the example values")
@@ -210,19 +208,6 @@ MAPBOX_ACCESS_TOKEN=file-map-token
 	if err != nil {
 		t.Fatal(err)
 	}
-	localURL, err := cfg.localDatabaseURL("5432")
-	if err != nil {
-		t.Fatal(err)
-	}
-	connection, err := url.Parse(localURL)
-	if err != nil {
-		t.Fatal("could not parse the derived database URL")
-	}
-	password, _ := connection.User.Password()
-	if connection.Host != "localhost:5432" || connection.Path != "/cats_sample" ||
-		connection.User.Username() != "sample" || password != "sample:@/?#password" {
-		t.Fatal("derived connection did not preserve the local database settings")
-	}
 	if cfg.ImageDomain != "images.example.com" || cfg.ImageAccountHash != "sample-hash" ||
 		cfg.MapboxAccessToken != "file-map-token" {
 		t.Fatal("image or map settings were not loaded from .env")
@@ -329,8 +314,5 @@ func TestConfigStartupProcess(t *testing.T) {
 		t.Skip("only used by the startup log test")
 	}
 	os.Args = []string{"cats-of-asia-reloaded"}
-	if os.Getenv("CATS_CONFIG_HELPER_COMMAND") == "prepare-local" {
-		os.Args = append(os.Args, "prepare-local")
-	}
 	main()
 }

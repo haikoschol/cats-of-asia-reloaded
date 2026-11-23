@@ -17,12 +17,6 @@ jobs:
     name: Go and JavaScript tests
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      POSTGRES_USER: cats_test
-      POSTGRES_PASSWORD: cats-test-only
-      POSTGRES_DB: cats_test
-      DATABASE_URL: postgres://cats_test:cats-test-only@localhost:5433/cats_test?sslmode=disable
-      USERS_DATABASE_URL: postgres://cats_test:cats-test-only@localhost:5433/cats_test?sslmode=disable
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

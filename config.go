@@ -28,9 +28,6 @@ type config struct {
 	MapboxAccessToken      string `env:"MAPBOX_ACCESS_TOKEN"`
 	GoogleGeocodingEnabled bool   `env:"GOOGLE_GEOCODING_ENABLED"`
 	GoogleMapsAPIKey       string `env:"GOOGLE_MAPS_API_KEY"`
-	PostgresUser           string `env:"POSTGRES_USER"`
-	PostgresPassword       string `env:"POSTGRES_PASSWORD"`
-	PostgresDB             string `env:"POSTGRES_DB"`
 }
 
 // Read .env as data, without changing the process environment. Existing
@@ -139,35 +136,4 @@ func (cfg config) validateMap() error {
 		return fmt.Errorf("MAPBOX_ACCESS_TOKEN must be a public browser token starting with pk.")
 	}
 	return nil
-}
-
-func (cfg config) validateLocalDatabase() error {
-	for _, setting := range []struct{ name, value string }{
-		{"POSTGRES_USER", cfg.PostgresUser},
-		{"POSTGRES_PASSWORD", cfg.PostgresPassword},
-		{"POSTGRES_DB", cfg.PostgresDB},
-	} {
-		if setting.value == "" {
-			return fmt.Errorf("%s is not set", setting.name)
-		}
-	}
-	return nil
-}
-
-func (cfg config) localDatabaseURL(port string) (string, error) {
-	if err := cfg.validateLocalDatabase(); err != nil {
-		return "", err
-	}
-	number, err := strconv.Atoi(port)
-	if err != nil || number < 1 || number > 65535 {
-		return "", fmt.Errorf("local database port must be between 1 and 65535")
-	}
-	connection := url.URL{
-		Scheme:   "postgres",
-		User:     url.UserPassword(cfg.PostgresUser, cfg.PostgresPassword),
-		Host:     net.JoinHostPort("localhost", port),
-		Path:     "/" + cfg.PostgresDB,
-		RawQuery: "sslmode=disable",
-	}
-	return connection.String(), nil
 }

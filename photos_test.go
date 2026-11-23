@@ -79,7 +79,7 @@ func TestPhotosAPI(t *testing.T) {
 			` + tt.fixtures); err != nil {
 				t.Fatal(err)
 			}
-			cfg := config{DatabaseURL: "postgres://example:fake-private-password@localhost/unused", PostgresPassword: "fake-private-password"}
+			cfg := config{DatabaseURL: "postgres://example:fake-private-password@localhost/unused"}
 			if len(tt.want) > 0 {
 				cfg.ImageDomain, cfg.ImageAccountHash = "images.example.com", "example-account-hash"
 			}
@@ -175,7 +175,7 @@ func TestPhotosPoolWaitCancellation(t *testing.T) {
 
 func TestContentDatabaseWritesAndReadOnlyTransactions(t *testing.T) {
 	u, err := url.Parse(testDatabaseURL(t))
-	if err != nil || u.Host == "" {
+	if err != nil || u.Query().Get("host") == "" {
 		t.Fatal("run integration tests with ./scripts/run-tests.sh")
 	}
 	query := u.Query()

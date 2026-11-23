@@ -1,7 +1,10 @@
 { inputs, pkgs, ... }:
 
 {
-  packages = [ (inputs.go-overlay.lib.mkGoBin pkgs).versions."1.27.4" ];
+  packages = [
+    (inputs.go-overlay.lib.mkGoBin pkgs).versions."1.27.4"
+    pkgs.jq
+  ];
 
   # Plain JavaScript; Node.js is only needed for the existing tests.
   languages.javascript = {
@@ -10,6 +13,21 @@
   };
 
   env.GOTOOLCHAIN = "local";
+
+  services.postgres = {
+    enable = true;
+    package = inputs.nixpkgs-postgres.legacyPackages.${pkgs.stdenv.hostPlatform.system}.postgresql_18;
+    extensions = extensions: [ extensions.postgis ];
+    port = 5434;
+    initdbArgs = [ "--locale=C" "--encoding=UTF8" "--auth-local=peer" "--auth-host=reject" ];
+    settings.unix_socket_permissions = "0700";
+    initialDatabases = [{ name = "cats"; }];
+  };
+
+  processes.app = {
+    exec = "./scripts/run.sh";
+    after = [ "devenv:processes:postgres@ready" ];
+  };
 
   tasks = {
     "app:build".exec = "go build .";
@@ -26,6 +44,5 @@
     '';
   };
 
-  # The Go application and Docker Compose already read .env.
   dotenv.disableHint = true;
 }
