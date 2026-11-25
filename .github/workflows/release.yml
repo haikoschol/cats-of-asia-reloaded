@@ -33,7 +33,7 @@ jobs:
           skipPush: true
 
       - name: Run tests with an isolated database
-        run: nix run "$DEVENV_REF" -- --no-tui tasks run app:test --show-output
+        run: nix run "$DEVENV_REF" -- --no-tui --profile ci tasks run app:test --show-output
 
   release:
     name: Linux release

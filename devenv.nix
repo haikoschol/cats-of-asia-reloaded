@@ -1,8 +1,10 @@
-{ inputs, pkgs, ... }:
+{ inputs, lib, pkgs, ... }:
 
 let
   nodejs = pkgs.nodejs_26;
   pgconsole = pkgs.callPackage ./devenv/pgconsole { inherit nodejs; };
+  postgresql = inputs.nixpkgs-postgres.legacyPackages.${pkgs.stdenv.hostPlatform.system}.postgresql_18;
+  postgisExtensions = extensions: [ extensions.postgis ];
 in
 {
   packages = [
@@ -14,14 +16,24 @@ in
   languages.javascript = {
     enable = true;
     package = nodejs;
+    lsp.enable = false;
   };
 
   env.GOTOOLCHAIN = "local";
 
+  profiles.ci.module = {
+    stdenv = pkgs.stdenvNoCC;
+    env.CGO_ENABLED = "0";
+    languages.javascript.package = pkgs.nodejs-slim_26;
+    packages = [ (lib.getBin (postgresql.withPackages postgisExtensions)) ];
+    services.postgres.enable = false;
+    processes = lib.mkForce { };
+  };
+
   services.postgres = {
     enable = true;
-    package = inputs.nixpkgs-postgres.legacyPackages.${pkgs.stdenv.hostPlatform.system}.postgresql_18;
-    extensions = extensions: [ extensions.postgis ];
+    package = postgresql;
+    extensions = postgisExtensions;
     port = 5434;
     initdbArgs = [ "--locale=C" "--encoding=UTF8" "--auth-local=peer" "--auth-host=reject" ];
     settings.unix_socket_permissions = "0700";
