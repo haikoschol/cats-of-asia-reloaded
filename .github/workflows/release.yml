@@ -9,31 +9,53 @@ on:
 permissions:
   contents: read
 
-env:
-  DEVENV_REF: github:NixOS/nixpkgs/1c872b8c508bbbfebc1b0b74777ff391ce0a574c#devenv
-
 jobs:
   test:
     name: Go and JavaScript tests
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Set up Nix
+      - name: Pull and verify the matching CI image
+        id: ci-image
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          if printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin \
+            && image=$(bash devenv/pull-ci-image.sh "ghcr.io/${GITHUB_REPOSITORY,,}-ci"); then
+            printf 'image=%s\n' "$image" >> "$GITHUB_OUTPUT"
+          else
+            echo 'No usable CI image. Running tests with devenv.'
+          fi
+
+      - name: Run tests in the verified CI image
+        if: steps.ci-image.outputs.image != ''
+        env:
+          CI_IMAGE: ${{ steps.ci-image.outputs.image }}
+        run: docker run --rm --mount "type=bind,source=$PWD,target=/workspace,readonly" "$CI_IMAGE"
+
+      - name: Set up Nix for the fallback
+        if: steps.ci-image.outputs.image == ''
         uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
 
       - name: Enable the devenv binary cache
+        if: steps.ci-image.outputs.image == ''
         uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
           name: devenv
           skipPush: true
 
-      - name: Run tests with an isolated database
-        run: nix run "$DEVENV_REF" -- --no-tui --profile ci tasks run app:test --show-output
+      - name: Run tests with devenv
+        if: steps.ci-image.outputs.image == ''
+        run: nix run "$(cat devenv/cli-ref)" -- --no-tui --profile ci tasks run app:test --show-output
 
   release:
     name: Linux release
@@ -66,7 +88,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          nix run "$DEVENV_REF" -- --no-tui tasks run app:release --show-output
+          nix run "$(cat devenv/cli-ref)" -- --no-tui tasks run app:release --show-output
           echo "version=coa-${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
 
       - name: Publish completed release

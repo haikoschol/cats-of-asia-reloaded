@@ -21,13 +21,14 @@ in
 
   env.GOTOOLCHAIN = "local";
 
-  profiles.ci.module = {
+  profiles.ci.module = { config, ... }: {
     stdenv = pkgs.stdenvNoCC;
     env.CGO_ENABLED = "0";
     languages.javascript.package = pkgs.nodejs-slim_26;
     packages = [ (lib.getBin (postgresql.withPackages postgisExtensions)) ];
     services.postgres.enable = false;
     processes = lib.mkForce { };
+    outputs.ci-image = pkgs.callPackage ./devenv/ci-image.nix { inherit config; };
   };
 
   services.postgres = {
