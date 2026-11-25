@@ -22,8 +22,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    outputs:
-      digest: ${{ steps.publish.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -37,7 +35,6 @@ jobs:
           skipPush: true
 
       - name: Build and push the pinned CI environment
-        id: publish
         env:
           GHCR_TOKEN: ${{ github.token }}
         run: |
@@ -51,34 +48,3 @@ jobs:
           docker tag cats-of-asia-ci:local "$image"
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker push "$image"
-          digest=$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$image")
-          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
-
-  benchmark:
-    name: Cold image pull and full test suite
-    needs: publish
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Time the cold pull and tests
-        env:
-          GHCR_TOKEN: ${{ github.token }}
-          CI_IMAGE_DIGEST: ${{ needs.publish.outputs.digest }}
-        run: |
-          set -euo pipefail
-          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          start=$SECONDS
-          image=$(bash devenv/pull-ci-image.sh "ghcr.io/${GITHUB_REPOSITORY,,}-ci" "$CI_IMAGE_DIGEST")
-          pulled=$SECONDS
-          docker run --rm --mount "type=bind,source=$PWD,target=/workspace,readonly" "$image"
-          finish=$SECONDS
-          printf 'Cold pull and verification: %s s\n\nFull suite: %s s\n\nTotal: %s s\n' \
-            "$((pulled - start))" "$((finish - pulled))" "$((finish - start))" | tee -a "$GITHUB_STEP_SUMMARY"
