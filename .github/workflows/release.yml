@@ -36,11 +36,35 @@ jobs:
             echo 'No usable CI image. Running tests with devenv.'
           fi
 
+      - name: Cache Go modules and build outputs
+        if: steps.ci-image.outputs.image != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/coa-go-cache
+          key: go-ci-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.ci-image.outputs.image }}-${{ hashFiles('go.mod', 'go.sum') }}
+          restore-keys: |
+            go-ci-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.ci-image.outputs.image }}-
+
       - name: Run tests in the verified CI image
         if: steps.ci-image.outputs.image != ''
         env:
           CI_IMAGE: ${{ steps.ci-image.outputs.image }}
-        run: docker run --rm --mount "type=bind,source=$PWD,target=/workspace,readonly" "$CI_IMAGE"
+        run: |
+          set -euo pipefail
+          cache_dir="$RUNNER_TEMP/coa-go-cache"
+          mkdir -p "$cache_dir"
+          runner_owner="$(id -u):$(id -g)"
+          image_owner=$(docker image inspect --format '{{.Config.User}}' "$CI_IMAGE")
+          # The image runs as a non-root user with a different UID from the runner.
+          trap 'sudo chown -hR -- "$runner_owner" "$cache_dir"' EXIT
+          sudo chown -hR -- "$image_owner" "$cache_dir"
+
+          docker run --rm \
+            --mount "type=bind,source=$PWD,target=/workspace,readonly" \
+            --mount "type=bind,source=$cache_dir,target=/go-cache" \
+            --env GOMODCACHE=/go-cache/mod \
+            --env GOCACHE=/go-cache/build \
+            "$CI_IMAGE"
 
       - name: Set up Nix for the fallback
         if: steps.ci-image.outputs.image == ''
