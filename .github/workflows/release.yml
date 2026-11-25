@@ -9,38 +9,77 @@ on:
 permissions:
   contents: read
 
-env:
-  GOTOOLCHAIN: local
-
 jobs:
   test:
-    name: Go tests
+    name: Go and JavaScript tests
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      POSTGRES_USER: cats_test
-      POSTGRES_PASSWORD: cats-test-only
-      POSTGRES_DB: cats_test
-      DATABASE_URL: postgres://cats_test:cats-test-only@localhost:5433/cats_test?sslmode=disable
-      USERS_DATABASE_URL: postgres://cats_test:cats-test-only@localhost:5433/cats_test?sslmode=disable
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
+      - name: Pull and verify the matching CI image
+        id: ci-image
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          if printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin \
+            && image=$(bash devenv/pull-ci-image.sh "ghcr.io/${GITHUB_REPOSITORY,,}-ci"); then
+            printf 'image=%s\n' "$image" >> "$GITHUB_OUTPUT"
+          else
+            echo 'No usable CI image. Running tests with devenv.'
+          fi
 
-      - name: Set up Node.js for browser metadata tests
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - name: Cache Go modules and build outputs
+        if: steps.ci-image.outputs.image != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          node-version: '24'
+          path: ${{ runner.temp }}/coa-go-cache
+          key: go-ci-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.ci-image.outputs.image }}-${{ hashFiles('go.mod', 'go.sum') }}
+          restore-keys: |
+            go-ci-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.ci-image.outputs.image }}-
 
-      - name: Run tests with an isolated database
-        run: ./scripts/run-tests.sh
+      - name: Run tests in the verified CI image
+        if: steps.ci-image.outputs.image != ''
+        env:
+          CI_IMAGE: ${{ steps.ci-image.outputs.image }}
+        run: |
+          set -euo pipefail
+          cache_dir="$RUNNER_TEMP/coa-go-cache"
+          mkdir -p "$cache_dir"
+          runner_owner="$(id -u):$(id -g)"
+          image_owner=$(docker image inspect --format '{{.Config.User}}' "$CI_IMAGE")
+          # The image runs as a non-root user with a different UID from the runner.
+          trap 'sudo chown -hR -- "$runner_owner" "$cache_dir"' EXIT
+          sudo chown -hR -- "$image_owner" "$cache_dir"
+
+          docker run --rm \
+            --mount "type=bind,source=$PWD,target=/workspace,readonly" \
+            --mount "type=bind,source=$cache_dir,target=/go-cache" \
+            --env GOMODCACHE=/go-cache/mod \
+            --env GOCACHE=/go-cache/build \
+            "$CI_IMAGE"
+
+      - name: Set up Nix for the fallback
+        if: steps.ci-image.outputs.image == ''
+        uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+
+      - name: Enable the devenv binary cache
+        if: steps.ci-image.outputs.image == ''
+        uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: devenv
+          skipPush: true
+
+      - name: Run tests with devenv
+        if: steps.ci-image.outputs.image == ''
+        run: nix run "$(cat devenv/cli-ref)" -- --no-tui --profile ci tasks run app:test --show-output
 
   release:
     name: Linux release
@@ -59,26 +98,22 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up Nix
+        uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+
+      - name: Enable the devenv binary cache
+        uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
-          go-version-file: go.mod
+          name: devenv
+          skipPush: true
 
       - name: Build Linux binary and checksum
         id: build
-        env:
-          CGO_ENABLED: '0'
-          GOOS: linux
-          GOARCH: amd64
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="coa-${GITHUB_SHA:0:7}"
-          BINARY="${VERSION}-linux-amd64"
-          mkdir -p dist
-          go build -trimpath -o "dist/$BINARY" .
-          (cd dist && sha256sum "$BINARY" > "$BINARY.sha256")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          nix run "$(cat devenv/cli-ref)" -- --no-tui tasks run app:release --show-output
+          echo "version=coa-${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
 
       - name: Publish completed release
         env:

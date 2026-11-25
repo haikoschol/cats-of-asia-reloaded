@@ -1,3 +1,5 @@
+//go:build !integration
+
 package main
 
 import (
@@ -10,12 +12,6 @@ import (
 	"testing/iotest"
 	"time"
 )
-
-type googleGeocodingRoundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f googleGeocodingRoundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
-	return f(r)
-}
 
 func googleGeocodingTestApp(transport googleGeocodingRoundTripFunc) *application {
 	return &application{

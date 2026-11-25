@@ -1,12 +1,29 @@
 # Development
 
+## Development environment
+
+Run `devenv shell` from the repository root for Go 1.27.4 and Node.js 26.
+With only Nix installed, use `nix run github:NixOS/nixpkgs/nixpkgs-unstable#devenv -- shell`.
+`devenv.lock` pins the inputs for both tools; update it
+deliberately with `devenv update`. `GOTOOLCHAIN=local` prevents Go from downloading
+a different toolchain automatically.
+
+`devenv up` starts PostgreSQL 18 with PostGIS, applies the schema to the local
+`cats` database, then runs the app. Postgres listens on a project Unix socket
+and uses your OS user via peer authentication. Its data persists under
+`$DEVENV_STATE/postgres`.
+
 ## Configuration
 
 Settings are listed in [.env.example](../.env.example). Environment variables
-override `.env`; both database URLs are required.
+override `.env`.
 
-- `DATABASE_URL`: photo data and Places. Uploads need table/sequence write access.
-- `USERS_DATABASE_URL`: users and sessions; normally the local Docker database.
+- `USERS_DATABASE_URL`: users and sessions. `devenv up` supplies the local socket
+  URL. Set it explicitly when running the binary outside this workflow.
+- `DATABASE_URL` (optional): overrides where the app reads and writes photos and
+  Places. Leave it unset or blank to use `USERS_DATABASE_URL`, including for
+  manual upload checks. Use a separate read-only role when manually checking
+  against production photo data. Automated tests use disposable PostGIS.
 - `HTTP_LISTEN_ADDR`: defaults to `:3000`.
 - `SESSION_COOKIE_SECURE`: `false` for local HTTP, `true` behind production HTTPS.
 - Image/map settings: public delivery domain/hash and a public Mapbox token.
@@ -17,27 +34,24 @@ URL-encode special characters in database credentials.
 
 ## Local accounts and database
 
-Replace `USERNAME` with your chosen login name:
+With `devenv up` running, replace `USERNAME` with your chosen login name:
 
 ```sh
-./scripts/run.sh create-user USERNAME
+devenv shell -- ./scripts/run.sh create-user USERNAME
 ```
 
-Enter the password twice at the hidden prompts. The account is created in
-`USERS_DATABASE_URL`; restart `./scripts/run.sh` and sign in at `/login`.
+Enter the password twice at the hidden prompts, then sign in at `/login`.
 There is no public signup or password-change screen.
 
-While the development script runs, [pgconsole](http://localhost:3001/) shows the
-local database. External photo data must be inspected through its own connection.
-The startup script applies [schema.sql](../scripts/schema.sql) only to the local
-Docker database. Normal startup adds no sample photos or places.
+Inspect the local database in [pgconsole](http://127.0.0.1:3001/) while
+`devenv up` is running, or use `devenv shell -- psql -d cats`. Pgconsole
+connects only to the local `cats` database. Normal startup adds no sample photos
+or places. To load photos from an archive, run
+`devenv shell -- ./scripts/import-db-dump.sh path/to/backup.dump`.
 
-Do not delete the development volume `postgres18-data` to troubleshoot a problem.
-Older PostgreSQL 17 data is not imported automatically; back up and restore it
-before using the new database, and retain the old volume until verified.
-
-For older `.env` files: rename the former local `DATABASE_URL` to
-`USERS_DATABASE_URL`, and `PHOTOS_DATABASE_URL` to `DATABASE_URL`.
+The old Docker volume `postgres18-data` is retained. Data is not moved
+automatically. If you need it, dump the old database and restore it into the
+new one. Remove obsolete `POSTGRES_*` settings from your local `.env`.
 
 ## Existing photo databases
 
@@ -78,8 +92,15 @@ or invalid CSRF returns 403. See [upload details](upload.md#api).
 
 ## Tests, builds and deployment
 
-The [test runner](../scripts/run-tests.sh) uses a disposable PostGIS database on
-port 5433 for both connections and removes its own test volume afterward.
+Plain `go test ./...` runs only tests that work in memory. Go test files use
+`!integration` for unit tests and `integration` for tests that use files,
+loopback HTTP, subprocesses or the test database.
+
+The [test runner](../scripts/run-tests.sh) runs the whole suite by default
+(including in CI). For integration tests, it runs the JavaScript checks first,
+then starts disposable PostGIS on a private Unix socket and runs the Go suite
+with `go test -tags integration ./...`. Both database connections point at
+that instance, and the runner removes its temporary data directory.
 Provider calls are substituted; automated tests do not upload real images.
 [EXIF fixtures](../testdata/upload/README.md) can also be used for manual checks.
 Phone file selection and real provider delivery need browser/device checks.
@@ -90,7 +111,14 @@ Vendored asset provenance/licenses are retained with
 [exifr](../static/vendor/exifr/README.md) and
 [Mapbox](../static/vendor/mapbox/README.md).
 
-[GitHub CI](../.github/workflows/release.yml) tests PRs and main. After successful
-main tests it publishes a Linux amd64 release named `coa-<commit-prefix>`.
+[GitHub CI](../.github/workflows/release.yml) runs the test script on PRs and
+main in a fingerprint-matched GHCR image, or runs `app:test` with devenv when
+no verified image is available. The [image workflow](../.github/workflows/ci-image.yml)
+publishes from `main`.
+After successful main tests it runs `app:release`, then publishes
+`coa-<commit-prefix>`. To build the Linux amd64 binary and SHA-256 checksum
+locally without publishing, run `devenv tasks run app:release` and look in
+`dist/`. Release filenames use the checked-out commit; use a clean checkout
+to reproduce a published build.
 Deployment is separate; use
 [cats-of-asia-infra](https://github.com/haikoschol/cats-of-asia-infra).

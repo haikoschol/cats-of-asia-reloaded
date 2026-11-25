@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://devenv.sh/devenv.schema.json
+inputs:
+  nixpkgs:
+    url: github:cachix/devenv-nixpkgs/rolling
+  nixpkgs-postgres:
+    url: github:NixOS/nixpkgs/1c872b8c508bbbfebc1b0b74777ff391ce0a574c
+  go-overlay:
+    url: github:purpleclay/go-overlay
+    inputs:
+      nixpkgs:
+        follows: nixpkgs

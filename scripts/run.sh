@@ -1,26 +1,21 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-echo "Building the application..."
-go build .
-
-./cats-of-asia-reloaded prepare-local
-
-cleanup() {
-  docker compose down
-}
-trap cleanup EXIT
-trap 'exit 130' INT TERM
-
-if ! docker compose up --wait --wait-timeout 120; then
-  echo "Development services failed to start or become ready within 120 seconds." >&2
-  docker compose logs --no-color >&2 || true
+if [[ -z "${DEVENV_RUNTIME:-}" || -z "${PGPORT:-}" ]]; then
+  echo "Start development with devenv up." >&2
   exit 1
 fi
 
-docker compose exec -T db sh -c \
-  'exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
-  < scripts/schema.sql
-
-./cats-of-asia-reloaded "$@"
+socket="$DEVENV_RUNTIME/postgres"
+role=$(id -un)
+unset PGSERVICE PGHOSTADDR PGOPTIONS PGTARGETSESSIONATTRS
+if (( $# == 0 )); then
+  go build .
+  psql -X -w -v ON_ERROR_STOP=1 -h "$socket" -p "$PGPORT" -U "$role" -d cats -f scripts/schema.sql
+fi
+socket=$(jq -nr --arg socket "$socket" '$socket | @uri')
+role=$(jq -nr --arg role "$role" '$role | @uri')
+export USERS_DATABASE_URL="postgresql:///cats?host=$socket&port=$PGPORT&user=$role&sslmode=disable"
+unset PGHOST PGPORT
+exec ./cats-of-asia-reloaded "$@"

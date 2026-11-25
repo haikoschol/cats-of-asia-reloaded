@@ -27,28 +27,12 @@ func main() {
 
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
-		case "prepare-local":
-			if len(os.Args) != 2 {
-				log.Fatal("usage: cats-of-asia-reloaded prepare-local")
-			}
-			if err := writePgconsoleConfig(cfg, "pgconsole.toml"); err != nil {
-				log.Fatal(err)
-			}
-			return
-		case "run-tests":
-			if len(os.Args) != 3 {
-				log.Fatal("usage: cats-of-asia-reloaded run-tests <test-port>")
-			}
-			if err := runTests(cfg, os.Args[2]); err != nil {
-				log.Fatal(err)
-			}
-			return
 		case "create-user":
 			if len(os.Args) != 3 {
 				log.Fatal("usage: cats-of-asia-reloaded create-user <username>")
 			}
 		default:
-			log.Fatal("unknown command; use create-user, prepare-local or run-tests")
+			log.Fatal("unknown command; use create-user")
 		}
 	}
 

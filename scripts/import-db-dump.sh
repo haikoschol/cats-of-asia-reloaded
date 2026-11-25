@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
   echo "Usage: $0 [-replace] path/to/backup.dump"
-  echo "Import photo data into the running local Docker Compose database."
+  echo "Import photo data into the running devenv development database."
   echo "-replace clears photo tables first; users and sessions are preserved."
 }
 
@@ -33,21 +33,20 @@ dump_file="$(cd -- "$(dirname -- "$dump_file")" && pwd)/$(basename -- "$dump_fil
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd -- "$project_dir"
 
+if [[ -z "${DEVENV_RUNTIME:-}" || -z "${PGPORT:-}" ]]; then
+  echo "Run this in devenv shell with the development database running." >&2
+  exit 1
+fi
+
 work_dir=$(mktemp -d)
-container_dir=
 cleanup() {
-  if [[ -n "$container_dir" ]]; then
-    docker compose exec -T db rm -rf -- "$container_dir" >/dev/null 2>&1 || true
-  fi
   rm -rf -- "$work_dir"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-container_dir=$(docker compose exec -T db mktemp -d /tmp/import-db-dump.XXXXXXXX)
-docker compose cp "$dump_file" "db:$container_dir/backup.dump" >/dev/null
-docker compose exec -T db pg_restore --list "$container_dir/backup.dump" > "$work_dir/archive.list"
+pg_restore --list "$dump_file" > "$work_dir/archive.list"
 
 # Restore only the application's content tables, in foreign-key dependency order.
 # Include their sequence values, while excluding authentication and Django tables.
@@ -75,8 +74,6 @@ awk '
   exit 1
 }
 
-docker compose cp "$work_dir/import.list" "db:$container_dir/import.list" >/dev/null
-
 # Generate the complete import before touching the database. psql rolls back
 # table changes if schema initialization, truncation, or data loading fails.
 printf 'BEGIN;\n' > "$work_dir/import.sql"
@@ -88,14 +85,15 @@ TRUNCATE TABLE public.photos_post, public.photos_rawmetadata,
   public.photos_location RESTART IDENTITY;
 SQL
 fi
-docker compose exec -T db pg_restore \
+pg_restore \
   --data-only --no-owner --no-privileges --file=- \
-  --use-list="$container_dir/import.list" \
-  "$container_dir/backup.dump" >> "$work_dir/import.sql"
+  --use-list="$work_dir/import.list" \
+  "$dump_file" >> "$work_dir/import.sql"
 printf '\nCOMMIT;\n' >> "$work_dir/import.sql"
 
-docker compose exec -T db sh -c \
-  'exec psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+unset PGSERVICE PGHOSTADDR PGOPTIONS PGTARGETSESSIONATTRS
+psql -X -w -v ON_ERROR_STOP=1 -h "$DEVENV_RUNTIME/postgres" -p "$PGPORT" \
+  -U "$(id -un)" -d cats \
   < "$work_dir/import.sql"
 
 echo "Photo data imported. Local users and sessions were preserved."

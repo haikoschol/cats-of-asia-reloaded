@@ -1,0 +1,50 @@
+name: Publish CI image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - devenv.nix
+      - devenv.yaml
+      - devenv.lock
+      - devenv/**
+      - .github/workflows/ci-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: devenv
+          skipPush: true
+
+      - name: Build and push the pinned CI environment
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          fingerprint=$(bash devenv/ci-fingerprint.sh)
+          image="ghcr.io/${GITHUB_REPOSITORY,,}-ci:ci-$fingerprint"
+          archive=$(nix run "$(cat devenv/cli-ref)" -- --no-tui --profile ci \
+            --option env.COA_CI_FINGERPRINT:string "$fingerprint" build outputs.ci-image \
+            | jq -er '.["outputs.ci-image"]')
+          docker load --input "$archive"
+          docker tag cats-of-asia-ci:local "$image"
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$image"
