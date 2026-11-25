@@ -1,7 +1,8 @@
 { inputs, pkgs, ... }:
 
 let
-  pgconsole = pkgs.callPackage ./devenv/pgconsole { };
+  nodejs = pkgs.nodejs_26;
+  pgconsole = pkgs.callPackage ./devenv/pgconsole { inherit nodejs; };
 in
 {
   packages = [
@@ -12,7 +13,7 @@ in
   # Plain JavaScript; no frontend build is needed.
   languages.javascript = {
     enable = true;
-    package = pkgs.nodejs_24;
+    package = nodejs;
   };
 
   env.GOTOOLCHAIN = "local";

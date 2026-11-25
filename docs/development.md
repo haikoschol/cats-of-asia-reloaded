@@ -2,7 +2,7 @@
 
 ## Development environment
 
-Run `devenv shell` from the repository root for Go 1.27.4 and Node.js 24.
+Run `devenv shell` from the repository root for Go 1.27.4 and Node.js 26.
 With only Nix installed, use `nix run github:NixOS/nixpkgs/nixpkgs-unstable#devenv -- shell`.
 `devenv.lock` pins the inputs for both tools; update it
 deliberately with `devenv update`. `GOTOOLCHAIN=local` prevents Go from downloading

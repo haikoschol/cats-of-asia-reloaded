@@ -1,4 +1,4 @@
-{ fetchurl, importNpmLock, nodejs_24, runCommand }:
+{ fetchurl, importNpmLock, nodejs, runCommand }:
 
 let
   version = "1.3.0";
@@ -8,7 +8,7 @@ let
   };
   deps = importNpmLock.buildNodeModules {
     npmRoot = ./.;
-    nodejs = nodejs_24;
+    inherit nodejs;
     derivationArgs.npmRebuildFlags = [ "--ignore-scripts" ];
   };
 in
@@ -29,7 +29,7 @@ runCommand "pgconsole-${version}" { } ''
     app.use(express2.json());'
   cat > "$out/bin/pgconsole" <<EOF
   #!$SHELL
-  exec "${nodejs_24}/bin/node" "$out/lib/pgconsole/dist/server.mjs" "\$@"
+  exec "${nodejs}/bin/node" "$out/lib/pgconsole/dist/server.mjs" "\$@"
   EOF
   chmod +x "$out/bin/pgconsole"
 ''
