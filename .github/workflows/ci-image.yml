@@ -2,7 +2,7 @@ name: Publish CI image
 
 on:
   push:
-    branches: [main]
+    branches: [main, haiko/devenv-setup]
     paths:
       - devenv.nix
       - devenv.yaml
@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   publish:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
